@@ -1,0 +1,28 @@
+---
+- name: Deploy SSH keys and configs
+  ansible.builtin.import_tasks: ssh_keys.yml
+
+- name: Prepare Jenkins image and artifacts
+  ansible.builtin.import_tasks: prepare_image.yml
+
+- name: Configure Jenkins files and JCasC
+  ansible.builtin.import_tasks: configure_files.yml
+  tags:
+    - jenkins_jobs
+
+- name: Deploy Jenkins container
+  ansible.builtin.import_tasks: deploy_container.yml
+
+- name: Configure Jenkins vhost for shared host proxy
+  ansible.builtin.import_tasks: jenkins_proxy.yml
+
+- name: Set ownership and permissions
+  ansible.builtin.import_tasks: ownership_and_perms.yml
+
+- name: Bootstrap controller agent nodes
+  ansible.builtin.import_tasks: controller_agents.yml
+
+- name: Check configured Jenkins jobs are present and reapply if missing
+  ansible.builtin.import_tasks: check_jobs.yml
+  tags:
+    - jenkins_jobs

@@ -1,0 +1,52 @@
+import hudson.model.Node
+import hudson.slaves.DumbSlave
+import hudson.slaves.JNLPLauncher
+import hudson.slaves.RetentionStrategy
+import jenkins.model.Jenkins
+
+try {
+  def jenkins = Jenkins.instance
+
+{% for agent in (jenkins_agent_nodes | default([]) | sort(attribute='name')) %}
+  def existingNode{{ loop.index }} = jenkins.getNode("{{ agent.name }}")
+  if (existingNode{{ loop.index }} != null) {
+    jenkins.removeNode(existingNode{{ loop.index }})
+    println("Removed existing Jenkins node for reconciliation: {{ agent.name }}")
+  }
+
+  def launcher{{ loop.index }} = new JNLPLauncher()
+
+  def nodeMode{{ loop.index }} = Node.Mode.{{ agent.mode | default('EXCLUSIVE') }}
+  def node{{ loop.index }} = new DumbSlave(
+    "{{ agent.name }}",
+    "Managed by Ansible startup automation as an inbound Jenkins worker",
+    "{{ agent.remote_fs }}",
+    "{{ agent.executors | default(1) }}",
+    nodeMode{{ loop.index }},
+    "{{ agent.labels }}",
+    launcher{{ loop.index }},
+    new RetentionStrategy.Always(),
+    []
+  )
+
+  jenkins.addNode(node{{ loop.index }})
+  println("Configured inbound Jenkins node: {{ agent.name }}")
+
+  def computer{{ loop.index }} = node{{ loop.index }}.toComputer()
+  if (computer{{ loop.index }} != null) {
+    def jnlpMac{{ loop.index }} = computer{{ loop.index }}.getJnlpMac()
+    if (jnlpMac{{ loop.index }} == null || jnlpMac{{ loop.index }}.trim().isEmpty()) {
+      throw new IllegalStateException("Failed to generate JNLP MAC for node {{ agent.name }}")
+    }
+    println("Generated inbound MAC for node: {{ agent.name }}")
+  } else {
+    throw new IllegalStateException("Failed to resolve Jenkins computer for node {{ agent.name }}")
+  }
+{% endfor %}
+
+  jenkins.save()
+  println("Jenkins inbound agent reconciliation completed successfully")
+} catch (Throwable t) {
+  println("Error reconciling Jenkins inbound agents: ${t}")
+  t.printStackTrace()
+}

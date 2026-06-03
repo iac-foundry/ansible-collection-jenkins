@@ -1,0 +1,32 @@
+---
+- name: Refresh system CA trust store after Jenkins proxy CA install
+  ansible.builtin.command:
+    argv:
+      - update-ca-certificates
+  become: true
+  changed_when: true
+
+- name: Restart Jenkins after JCasC or init updates
+  community.docker.docker_container:
+    name: jenkins
+    state: started
+    restart: true
+
+- name: Wait for Jenkins to become available after restart
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ jenkins_http_port | default(8081) }}/login"
+    method: GET
+    status_code: [200, 403]
+    validate_certs: false
+  register: jenkins_handler_health
+  until: jenkins_handler_health.status in [200, 403]
+  retries: 30
+  delay: 10
+  listen: Restart Jenkins after JCasC or init updates
+
+- name: Reload shared host proxy for Jenkins vhost updates
+  community.docker.docker_container_exec:
+    container: "{{ jenkins_proxy_container_name }}"
+    command: "nginx -s reload"
+  when: jenkins_proxy_enabled | bool
+  listen: Reload shared host proxy

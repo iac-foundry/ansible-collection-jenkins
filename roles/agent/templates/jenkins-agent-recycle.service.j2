@@ -1,0 +1,12 @@
+[Unit]
+Description=Safely recycle one Jenkins worker container
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/jenkins-agent-recycle.env
+ExecStart=/usr/local/sbin/jenkins-agent-recycle.sh
+
+[Install]
+WantedBy=multi-user.target

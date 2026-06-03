@@ -1,0 +1,36 @@
+# Redirect plain HTTP to HTTPS so Jenkins is never reachable over an unencrypted channel.
+server {
+    listen 80;
+    server_name {{ jenkins_proxy_server_name }};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name {{ jenkins_proxy_server_name }};
+
+    ssl_certificate /etc/nginx/ssl/jenkins/fullchain.crt;
+    ssl_certificate_key /etc/nginx/ssl/jenkins/server.key;
+    ssl_trusted_certificate /etc/nginx/ssl/jenkins/ca.crt;
+
+    client_max_body_size 2G;
+
+    location / {
+        proxy_pass {{ jenkins_proxy_upstream }};
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port 443;
+
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_redirect off;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}

@@ -1,0 +1,25 @@
+---
+# Bootstrap inbound Jenkins agent node definitions.
+
+- name: Remove legacy SSH agent JCasC fragment
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/casc_configs/30-jenkins-agents.yaml"
+    state: absent
+  notify: Restart Jenkins after JCasC or init updates
+
+- name: Ensure Jenkins init.groovy.d exists for startup automation
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/init.groovy.d"
+    state: directory
+    owner: "{{ jenkins_user_uid | default('1000') }}"
+    group: "{{ jenkins_user_gid | default('1000') }}"
+    mode: "0750"
+
+- name: Render Jenkins init Groovy for inbound agents
+  ansible.builtin.template:
+    src: init_jenkins_agents.groovy.j2
+    dest: "{{ jenkins_home }}/init.groovy.d/30-jenkins-agents.groovy"
+    owner: "{{ jenkins_user_uid | default('1000') }}"
+    group: "{{ jenkins_user_gid | default('1000') }}"
+    mode: "0640"
+  notify: Restart Jenkins after JCasC or init updates

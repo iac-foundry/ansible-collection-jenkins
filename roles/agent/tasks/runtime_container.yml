@@ -1,0 +1,125 @@
+---
+# Runtime: start the long-lived inbound Jenkins worker container using the
+# secrets and material resolved by controller_secret.yml and git_ssh_material.yml.
+
+- name: Validate custom inbound worker image exists locally
+  community.docker.docker_image_info:
+    name: "{{ jenkins_agent_hosts_container_image }}"
+  register: jenkins_agent_hosts_runtime_image_info
+  when: jenkins_agent_hosts_manage_custom_image | bool
+
+- name: Fail when custom inbound worker image is missing locally
+  ansible.builtin.fail:
+    msg: >-
+      Custom image {{ jenkins_agent_hosts_container_image }} is not present locally.
+      Ensure image_build.yml completed successfully on this host before running runtime_container.yml.
+  when:
+    - jenkins_agent_hosts_manage_custom_image | bool
+    - (jenkins_agent_hosts_runtime_image_info.images | default([]) | length) == 0
+
+- name: Run long-lived inbound Jenkins worker container
+  community.docker.docker_container:
+    name: "{{ jenkins_agent_hosts_container_name }}"
+    image: "{{ jenkins_agent_hosts_container_image }}"
+    pull: "{{ not (jenkins_agent_hosts_manage_custom_image | bool) }}"
+    restart_policy: unless-stopped
+    state: started
+    entrypoint: /bin/sh
+    command: >-
+      -lc "
+      set -euo pipefail;
+      if [ \"{{ jenkins_agent_hosts_controller_validate_tls | bool }}\" = \"True\" ]; then
+        keytool_bin=/opt/java/openjdk/bin/keytool;
+        if [ ! -x \"$keytool_bin\" ]; then
+          echo \"Missing keytool binary at $keytool_bin\" >&2;
+          exit 1;
+        fi;
+        cert_file=/tmp/iotel-step-ca-root.crt;
+        store_file=/tmp/iotel-agent-cacerts.jks;
+        printf '%s\\n' \"$JENKINS_AGENT_CA_CERT_PEM\" > \"$cert_file\";
+        rm -f \"$store_file\";
+            \"$keytool_bin\" -importcert -noprompt \
+              -alias \"$JENKINS_AGENT_CA_CERT_ALIAS\" \
+              -file \"$cert_file\" \
+              -keystore \"$store_file\" \
+              -storepass \"$JENKINS_AGENT_CA_TRUSTSTORE_PASSWORD\" >/dev/null;
+            export JAVA_TOOL_OPTIONS=\"${JAVA_TOOL_OPTIONS:-} \
+              -Djavax.net.ssl.trustStore=$store_file \
+              -Djavax.net.ssl.trustStorePassword=$JENKINS_AGENT_CA_TRUSTSTORE_PASSWORD\";
+      fi;
+      exec /usr/local/bin/jenkins-agent
+      "
+    etc_hosts: "{{ jenkins_agent_hosts_container_etc_hosts }}"
+    env:
+      JENKINS_URL: "{{ jenkins_agent_hosts_controller_url }}"
+      JENKINS_AGENT_NAME: "{{ jenkins_agent_hosts_node_local.name }}"
+      JENKINS_SECRET: "{{ jenkins_agent_hosts_secret_cmd.stdout | trim }}"
+      JENKINS_WEB_SOCKET: "{{ 'true' if jenkins_agent_hosts_use_websocket else 'false' }}"
+      JENKINS_AGENT_WORKDIR: "{{ jenkins_agent_hosts_remote_fs }}"
+      JENKINS_AGENT_CA_CERT_PEM: >-
+        {{
+          jenkins_agent_hosts_ca_cert_pem | default('') | trim
+          if (jenkins_agent_hosts_controller_validate_tls | bool)
+          else ''
+        }}
+      JENKINS_AGENT_CA_CERT_ALIAS: "{{ jenkins_agent_hosts_ca_cert_alias }}"
+      JENKINS_AGENT_CA_TRUSTSTORE_PASSWORD: "{{ jenkins_agent_hosts_ca_truststore_password }}"
+      VAULT_ADDR: "{{ jenkins_agent_hosts_vault_addr }}"
+    volumes:
+      # Seed trusted SCM host keys via global SSH known_hosts.
+      # Keep /home/jenkins/.ssh/known_hosts writable for day-2 key updates.
+      - "{{ jenkins_home }}/git_known_hosts:/etc/ssh/ssh_known_hosts:ro"
+    tmpfs:
+      - "/tmp:size={{ jenkins_agent_hosts_tmp_tmpfs_size }},mode=1777"
+      - /run:size=64m,mode=755
+      - "{{ jenkins_agent_hosts_workspace_tmpfs_mount }}"
+  register: jenkins_agent_hosts_runtime_container
+  no_log: true
+
+- name: Restart inbound Jenkins worker container when key material changes
+  community.docker.docker_container:
+    name: "{{ jenkins_agent_hosts_container_name }}"
+    state: started
+    restart: true
+  when:
+    - (baseline_preflight_vault_ssh_keys_changed | default(false))
+      or (jenkins_agent_hosts_git_key_stage_copy.changed | default(false))
+  no_log: true
+
+- name: Create SSH directory, copy keys, and fix permissions inside container
+  ansible.builtin.shell: |
+    ssh_dir="/home/jenkins/.ssh"
+
+    # Create directory with correct ownership and mode
+    docker exec -u 0 "$CONTAINER_NAME" \
+      install -d -o jenkins -g jenkins -m 700 "$ssh_dir"
+
+    # Copy keys into container
+    docker cp "$GIT_KEY_STAGE_PATH" \
+      "$CONTAINER_NAME:$ssh_dir/id_ed25519"
+
+    docker cp "$GIT_KEY_STAGE_PATH" \
+      "$CONTAINER_NAME:$ssh_dir/id_rsa"
+
+    docker cp "$INFRA_KEY_SRC_PATH" \
+      "$CONTAINER_NAME:$INFRA_KEY_DST_PATH"
+
+    # Fix ownership and permissions
+    docker exec -u 0 "$CONTAINER_NAME" \
+      chown -R jenkins:jenkins "$ssh_dir"
+
+    docker exec -u 0 "$CONTAINER_NAME" \
+      chmod 700 "$ssh_dir"
+
+    docker exec -u 0 "$CONTAINER_NAME" \
+      sh -c 'chmod 600 /home/jenkins/.ssh/*'
+  environment:
+    CONTAINER_NAME: "{{ jenkins_agent_hosts_container_name }}"
+    GIT_KEY_STAGE_PATH: "{{ jenkins_agent_hosts_git_key_stage_path }}"
+    INFRA_KEY_SRC_PATH: "{{ jenkins_agent_hosts_infra_key_src_path }}"
+    INFRA_KEY_DST_PATH: "{{ jenkins_agent_hosts_infra_key_dst_path }}"
+  when:
+    - (jenkins_agent_hosts_runtime_container.changed | default(false))
+      or (baseline_preflight_vault_ssh_keys_changed | default(false))
+      or (jenkins_agent_hosts_git_key_stage_copy.changed | default(false))
+  changed_when: false

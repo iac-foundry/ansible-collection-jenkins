@@ -1,0 +1,64 @@
+import hudson.plugins.git.BranchSpec
+import hudson.plugins.git.GitSCM
+import hudson.plugins.git.UserRemoteConfig
+import jenkins.model.Jenkins
+import org.jenkinsci.plugins.workflow.libs.GlobalLibraries
+import org.jenkinsci.plugins.workflow.libs.LibraryConfiguration
+import org.jenkinsci.plugins.workflow.libs.SCMRetriever
+
+try {
+  def desiredLibraries = []
+{% for lib in jenkins_global_shared_libraries | default([]) %}
+  def remoteConfig{{ loop.index }} = new UserRemoteConfig(
+    "{{ lib.repo_url }}",
+    null,
+    null,
+{% if (lib.credentials_id | default('') | string | length) > 0 %}
+    "{{ lib.credentials_id }}"
+{% else %}
+    null
+{% endif %}
+  )
+  def scm{{ loop.index }} = new GitSCM(
+    [remoteConfig{{ loop.index }}],
+    [new BranchSpec('*/${library.{{ lib.name }}.version}')],
+    false,
+    [],
+    null,
+    null,
+    []
+  )
+  def library{{ loop.index }} = new LibraryConfiguration("{{ lib.name }}", new SCMRetriever(scm{{ loop.index }}))
+  library{{ loop.index }}.setDefaultVersion("{{ lib.default_version | default('main') }}")
+  library{{ loop.index }}.setImplicit({{ (lib.implicit | default(false)) | bool | lower }})
+  library{{ loop.index }}.setAllowVersionOverride({{ (lib.allow_version_override | default(true)) | bool | lower }})
+  library{{ loop.index }}.setIncludeInChangesets({{ (lib.include_in_changesets | default(true)) | bool | lower }})
+  desiredLibraries << library{{ loop.index }}
+{% endfor %}
+
+  def globalLibraries = GlobalLibraries.get()
+  def currentLibraries = globalLibraries.getLibraries() ?: []
+  def currentNames = currentLibraries.collect { it.name }
+  def desiredNames = desiredLibraries.collect { it.name }
+
+  def librariesChanged = currentLibraries.size() != desiredLibraries.size() ||
+    desiredLibraries.any { desired ->
+      def current = currentLibraries.find { it.name == desired.name }
+      current == null ||
+        current.defaultVersion != desired.defaultVersion ||
+        current.implicit != desired.implicit ||
+        current.allowVersionOverride != desired.allowVersionOverride ||
+        current.includeInChangesets != desired.includeInChangesets
+    }
+
+  if (librariesChanged) {
+    globalLibraries.setLibraries(desiredLibraries)
+    globalLibraries.save()
+    Jenkins.instance.save()
+    println "Configured global shared libraries: ${desiredNames.join(', ')}"
+  } else {
+    println "Global shared libraries already configured: ${currentNames.join(', ')}"
+  }
+} catch (Throwable t) {
+  println "Error configuring global shared libraries: ${t}"
+}

@@ -1,0 +1,20 @@
+import jenkins.model.*
+
+// This script is managed by Ansible and will set the Jenkins root URL
+try {
+  def loc = JenkinsLocationConfiguration.get()
+  if (loc == null) {
+    println "JenkinsLocationConfiguration not available"
+  } else {
+    def desired = "{{ jenkins_root_url }}"
+    if (loc.getUrl() != desired) {
+      loc.setUrl(desired)
+      loc.save()
+      println "Set Jenkins root URL to ${desired}"
+    } else {
+      println "Jenkins root URL already set to ${desired}"
+    }
+  }
+} catch (Throwable t) {
+  println "Error setting Jenkins root URL: ${t}"
+}

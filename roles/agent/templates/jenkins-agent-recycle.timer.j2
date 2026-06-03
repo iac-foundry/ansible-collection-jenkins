@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule safe Jenkins worker recycling
+
+[Timer]
+OnCalendar={{ jenkins_agent_recycle_schedule }}
+RandomizedDelaySec={{ jenkins_agent_recycle_randomized_delay_seconds }}
+Persistent=true
+Unit=jenkins-agent-recycle.service
+
+[Install]
+WantedBy=timers.target

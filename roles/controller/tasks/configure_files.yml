@@ -1,0 +1,50 @@
+---
+- name: Increase inotify watches for large Jenkins workspaces
+  ansible.posix.sysctl:
+    name: fs.inotify.max_user_watches
+    value: 524288
+    state: present
+    sysctl_set: true
+    reload: true
+
+- name: Ensure limits file for Jenkins processes (host side)
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/jenkins.conf
+    content: |-
+      jenkins soft nofile 65535
+      jenkins hard nofile 65535
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure Jenkins init.groovy.d directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/init.groovy.d"
+    state: directory
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0750'
+
+- name: Ensure Jenkins JCasC directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/casc_configs"
+    state: directory
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0750'
+
+# Inject Vault-backed secrets into the JCasC secrets directory before rendering
+# the JCasC template. JCasC resolves ${VAR_NAME} from files in CASC_SECRETS_PATH.
+- name: Include Jenkins Vault secret injection
+  ansible.builtin.include_tasks: vault_secrets.yml
+  when: jenkins_oidc_enabled | default(false) | bool
+  tags: [vault, config]
+
+- name: Deploy Jenkins JCasC definition
+  ansible.builtin.template:
+    src: "jenkins_jcasc.yaml.j2"
+    dest: "{{ jenkins_home }}/casc_configs/jenkins.yaml"
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0640'
+  notify: Restart Jenkins after JCasC or init updates

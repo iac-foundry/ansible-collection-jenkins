@@ -1,0 +1,121 @@
+---
+# Git SSH material: ensure the host-level known_hosts file is populated for
+# bitbucket.org, stage the Git SSH private key to the jenkins home directory
+# (copy from host path or bootstrap from Vault), and validate the staged key
+# before it is mounted into the agent container.
+
+- name: Ensure jenkins home directory exists for SSH material staging
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}"
+    state: directory
+    owner: "{{ jenkins_user_uid | default('1000') }}"
+    group: "{{ jenkins_user_gid | default('1000') }}"
+    mode: '0750'
+  become: true
+
+- name: Populate host known_hosts with Bitbucket host key
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -F
+      - bitbucket.org
+      - -f
+      - "{{ jenkins_home }}/git_known_hosts"
+  register: jenkins_agent_hosts_known_hosts_lookup
+  changed_when: false
+  failed_when: false
+  become: true
+  tags:
+    - jenkins
+    - ssh
+
+- name: Populate host known_hosts with Bitbucket host key
+  ansible.builtin.shell: |
+    set -euo pipefail
+    mkdir -p {{ jenkins_home }}/.ssh
+    KNOWN={{ jenkins_home }}/git_known_hosts
+    touch "$KNOWN"
+    chmod 0644 "$KNOWN"
+    ssh-keyscan -H -t rsa,ed25519 bitbucket.org >> "$KNOWN"
+  args:
+    executable: /bin/bash
+  become: true
+  changed_when: true
+  when: (jenkins_agent_hosts_known_hosts_lookup.rc | default(1)) != 0
+  tags:
+    - jenkins
+    - ssh
+
+- name: Check host Git SSH private key path for inbound agent
+  ansible.builtin.stat:
+    path: "{{ jenkins_agent_hosts_git_key_src_path }}"
+  register: jenkins_agent_hosts_git_key_stat
+  become: true
+
+- name: Stage Git SSH private key from host path for inbound agent container
+  ansible.builtin.copy:
+    src: "{{ jenkins_agent_hosts_git_key_src_path }}"
+    dest: "{{ jenkins_agent_hosts_git_key_stage_path }}"
+    owner: "{{ jenkins_agent_hosts_container_uid }}"
+    group: "{{ jenkins_agent_hosts_container_gid }}"
+    mode: '0600'
+    remote_src: true
+  become: true
+  register: jenkins_agent_hosts_git_key_stage_copy
+  no_log: true
+  when:
+    - jenkins_agent_hosts_git_key_stat.stat.exists | default(false)
+    - (jenkins_agent_hosts_git_key_stat.stat.size | default(0) | int) > 0
+
+- name: Fail when host Git SSH private key is missing
+  ansible.builtin.fail:
+    msg: >-
+      Host SSH key is missing at {{ jenkins_agent_hosts_git_key_src_path }}.
+      Terraform cloud-init bootstrap must write this key on first boot.
+  when: >-
+    not (jenkins_agent_hosts_git_key_stat.stat.exists | default(false)) or
+    (jenkins_agent_hosts_git_key_stat.stat.size | default(0) | int) == 0
+
+- name: Check staged Git SSH private key path for inbound agent container
+  ansible.builtin.stat:
+    path: "{{ jenkins_agent_hosts_git_key_stage_path }}"
+  register: jenkins_agent_hosts_git_key_stage_stat
+  become: true
+
+- name: Validate existing staged Git SSH private key
+  ansible.builtin.command:
+    cmd: "ssh-keygen -y -f {{ jenkins_agent_hosts_git_key_stage_path }}"
+  register: jenkins_agent_hosts_git_key_stage_existing_validate
+  changed_when: false
+  failed_when: false
+  no_log: true
+  become: true
+  when:
+    - jenkins_agent_hosts_git_key_stage_stat.stat.exists | default(false)
+    - (jenkins_agent_hosts_git_key_stage_stat.stat.size | default(0) | int) > 0
+
+- name: Remove invalid staged Git SSH private key before restage
+  ansible.builtin.file:
+    path: "{{ jenkins_agent_hosts_git_key_stage_path }}"
+    state: absent
+  become: true
+  when:
+    - jenkins_agent_hosts_git_key_stage_stat.stat.exists | default(false)
+    - (jenkins_agent_hosts_git_key_stage_existing_validate.rc | default(1)) != 0
+
+- name: Validate staged Git SSH private key for inbound agent container
+  ansible.builtin.command:
+    cmd: "ssh-keygen -y -f {{ jenkins_agent_hosts_git_key_stage_path }}"
+  register: jenkins_agent_hosts_git_key_stage_validate
+  changed_when: false
+  failed_when: false
+  no_log: true
+  become: true
+
+- name: Fail when staged Git SSH private key is missing or invalid
+  ansible.builtin.fail:
+    msg: >-
+      Staged Git SSH key at {{ jenkins_agent_hosts_git_key_stage_path }} is missing or invalid.
+      Ensure Terraform cloud-init bootstrap wrote a valid key to
+      {{ jenkins_agent_hosts_git_key_src_path }}.
+  when: (jenkins_agent_hosts_git_key_stage_validate.rc | default(1)) != 0

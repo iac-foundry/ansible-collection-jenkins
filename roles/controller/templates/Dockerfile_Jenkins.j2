@@ -1,0 +1,55 @@
+FROM {{ jenkins_base_image | default('jenkins/jenkins') }}:{{ jenkins_image_tag | default('latest') }}
+
+# Build-time args
+ARG DOCKER_GID=110
+
+USER root
+
+# Prevent interactive prompts during package installs
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Jenkins plugins at image build time for reproducible controller bootstraps.
+COPY jenkins-plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+# Minimal, reliable package installs. Install docker-ce-cli for Pipeline docker agent support;
+# the host's Docker socket is mounted at runtime (daemon runs on host).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      ca-certificates gnupg curl xorriso genisoimage python3-six wget unzip python3-pip && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends docker-ce-cli && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add HashiCorp repo and install Terraform/Packer/Ansible/sshpass
+RUN curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
+    # Use VERSION_CODENAME from /etc/os-release instead of lsb_release to avoid extra package
+    echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(. /etc/os-release && echo $VERSION_CODENAME) main" > /etc/apt/sources.list.d/hashicorp.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends terraform packer ansible sshpass && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create or modify docker group with the correct GID from host
+RUN if getent group docker; then \
+        groupmod -g ${DOCKER_GID} docker; \
+    else \
+        groupadd -g ${DOCKER_GID} docker; \
+    fi
+
+# Add jenkins user to docker group (jenkins user already exists in base image)
+RUN usermod -aG docker jenkins || true
+
+# Import the IOTel internal CA into the JVM truststore so Jenkins can verify TLS
+# connections to internal services (e.g. Authentik OIDC well-known endpoint).
+# The cert file is copied into the build context by the Ansible prepare_image.yml task.
+COPY iotel-ca.crt /tmp/iotel-ca.crt
+RUN keytool -importcert -noprompt -trustcacerts \
+      -alias {{ jenkins_internal_ca_cert_alias }} \
+      -file /tmp/iotel-ca.crt \
+      -keystore /opt/java/openjdk/lib/security/cacerts \
+      -storepass changeit && \
+    rm /tmp/iotel-ca.crt
+
+USER jenkins

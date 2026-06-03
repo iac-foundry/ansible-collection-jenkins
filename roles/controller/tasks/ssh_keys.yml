@@ -1,0 +1,132 @@
+---
+- name: Ensure controller SSH staging directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_git_ssh_key_host_path | dirname }}"
+    state: directory
+    owner: infraops
+    group: infraops
+    mode: '0700'
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Check controller Git SSH private key path
+  ansible.builtin.stat:
+    path: "{{ jenkins_git_ssh_key_host_path }}"
+  register: jenkins_controller_git_ssh_key_stat
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Validate existing controller Git SSH private key
+  ansible.builtin.command:
+    cmd: "ssh-keygen -y -f {{ jenkins_git_ssh_key_host_path }}"
+  register: jenkins_controller_git_ssh_key_validate
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when:
+    - not (jenkins_jobdsl_use_jenkins_credentials | bool)
+    - jenkins_controller_git_ssh_key_stat.stat.exists | default(false)
+    - (jenkins_controller_git_ssh_key_stat.stat.size | default(0) | int) > 0
+
+- name: Remove invalid controller Git SSH private key before re-seeding
+  ansible.builtin.file:
+    path: "{{ jenkins_git_ssh_key_host_path }}"
+    state: absent
+  when:
+    - not (jenkins_jobdsl_use_jenkins_credentials | bool)
+    - jenkins_controller_git_ssh_key_stat.stat.exists | default(false)
+    - >-
+      (jenkins_controller_git_ssh_key_stat.stat.size | default(0) | int) == 0 or
+      ((jenkins_controller_git_ssh_key_validate.rc | default(1)) != 0)
+
+- name: Ensure Bitbucket host key is present for controller SSH
+  ansible.builtin.shell: |
+    set -euo pipefail
+    touch {{ jenkins_git_known_hosts_host_path }}
+    chmod 0600 {{ jenkins_git_known_hosts_host_path }}
+    ssh-keygen -F bitbucket.org -f {{ jenkins_git_known_hosts_host_path }} >/dev/null 2>&1 || \
+      ssh-keyscan -H -t rsa bitbucket.org >> {{ jenkins_git_known_hosts_host_path }}
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: infraops
+  changed_when: false
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Ensure Jenkins SSH directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}/.ssh"
+    state: directory
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0700'
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Re-check controller Git SSH private key path after bootstrap
+  ansible.builtin.stat:
+    path: "{{ jenkins_git_ssh_key_host_path }}"
+  register: jenkins_git_ssh_key_stat
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Validate controller Git SSH private key after bootstrap
+  ansible.builtin.command:
+    cmd: "ssh-keygen -y -f {{ jenkins_git_ssh_key_host_path }}"
+  register: jenkins_git_ssh_key_validate
+  changed_when: false
+  no_log: true
+  when:
+    - not (jenkins_jobdsl_use_jenkins_credentials | bool)
+    - jenkins_git_ssh_key_stat.stat.exists | default(false)
+    - (jenkins_git_ssh_key_stat.stat.size | default(0) | int) > 0
+
+- name: Fail when controller Git SSH private key is missing
+  ansible.builtin.fail:
+    msg: >-
+      Jenkins JobDSL is configured without Jenkins credentials, but no controller SSH key
+      was found at {{ jenkins_git_ssh_key_host_path }}.
+      Ensure Terraform cloud-init bootstrap writes this key to the host.
+  when:
+    - not (jenkins_jobdsl_use_jenkins_credentials | bool)
+    - >-
+      not (jenkins_git_ssh_key_stat.stat.exists | default(false)) or
+      (jenkins_git_ssh_key_stat.stat.size | default(0) | int) == 0 or
+      ((jenkins_git_ssh_key_validate.rc | default(1)) != 0)
+
+- name: Deploy controller Git SSH private key for Jenkins SCM checkouts
+  ansible.builtin.copy:
+    src: "{{ jenkins_git_ssh_key_host_path }}"
+    dest: "{{ jenkins_home }}/.ssh/id_ed25519"
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0600'
+    remote_src: true
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+  no_log: true
+
+- name: Ensure Bitbucket host key is present for Jenkins SCM SSH validation
+  ansible.builtin.shell: |
+    set -euo pipefail
+    touch {{ jenkins_home }}/.ssh/known_hosts
+    chmod 0644 {{ jenkins_home }}/.ssh/known_hosts
+    ssh-keygen -F bitbucket.org -f {{ jenkins_home }}/.ssh/known_hosts >/dev/null 2>&1 || \
+      ssh-keyscan -H -t rsa bitbucket.org >> {{ jenkins_home }}/.ssh/known_hosts
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Check controller SSH config path
+  ansible.builtin.stat:
+    path: "{{ jenkins_git_ssh_config_host_path }}"
+  register: jenkins_git_ssh_config_stat
+  when: not (jenkins_jobdsl_use_jenkins_credentials | bool)
+
+- name: Deploy SSH config for Jenkins SCM host aliases
+  ansible.builtin.copy:
+    src: "{{ jenkins_git_ssh_config_host_path }}"
+    dest: "{{ jenkins_home }}/.ssh/config"
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0600'
+    remote_src: true
+  when:
+    - not (jenkins_jobdsl_use_jenkins_credentials | bool)
+    - jenkins_git_ssh_config_stat.stat.exists | default(false)

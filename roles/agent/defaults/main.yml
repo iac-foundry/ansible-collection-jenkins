@@ -1,0 +1,37 @@
+---
+# Multi-org defaults: consumer repos must override environment-specific values
+# (controller URL, CA endpoint, Vault address/paths, SSH paths, DNS mappings).
+jenkins_agent_hosts_manage_custom_image: true
+jenkins_agent_hosts_base_image: "jenkins/inbound-agent:jdk21"
+jenkins_agent_hosts_container_image: "blueprint_jenkins_inbound_agent:jdk21-tools"
+jenkins_agent_hosts_ansible_core_version: "2.18.3"
+jenkins_agent_hosts_install_hashicorp_tools: true
+jenkins_agent_hosts_install_terraform: true
+jenkins_agent_hosts_install_packer: true
+jenkins_agent_hosts_container_name_prefix: "jenkins-inbound-agent"
+jenkins_agent_hosts_tmp_tmpfs_size: "5g"
+jenkins_agent_hosts_workspace_tmpfs_size: "5g"
+jenkins_agent_hosts_container_uid: "1000"
+jenkins_agent_hosts_container_gid: "1000"
+jenkins_agent_hosts_controller_url: "https://{{ jenkins_proxy_server_name }}"
+jenkins_agent_hosts_controller_mode: "container"
+jenkins_agent_hosts_controller_validate_tls: true
+jenkins_agent_hosts_use_websocket: true
+jenkins_agent_hosts_ca_bootstrap_url: "http://vault.internal/root_ca.crt"
+jenkins_agent_hosts_ca_cert_alias: "platform-step-ca-root"
+jenkins_agent_hosts_ca_truststore_password: "changeit"
+# Vault address reachable from inside the agent container.
+# Points to the host's Vault Agent via the docker bridge gateway.
+jenkins_agent_hosts_vault_addr: "http://172.17.0.1:8100"
+jenkins_agent_hosts_static_etc_hosts: {}
+jenkins_agent_hosts_git_key_src_path: "{{ jenkins_git_ssh_key_host_path | default('/home/jenkins/.ssh/id_rsa_bitbucket') }}"
+jenkins_agent_hosts_git_key_stage_path: "{{ jenkins_home }}/git_id_ed25519"
+jenkins_agent_hosts_infra_key_src_path: "/home/jenkins/.ssh/id_ed25519_infraops"
+jenkins_agent_hosts_infra_key_dst_path: "/home/jenkins/.ssh/id_ed25519_infraops"
+# How long (seconds) to wait for Jenkins controller secret files to appear
+jenkins_agent_hosts_secret_wait_timeout: 300
+# When true, hide derived secret command output in logs
+jenkins_agent_hosts_secret_hide_output: true
+# Guardrail: when running inside Jenkins, skip mutating the worker host that
+# matches the currently executing Jenkins node to avoid self-disconnect/workspace loss.
+jenkins_agent_hosts_skip_current_executor_host: true

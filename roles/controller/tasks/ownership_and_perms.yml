@@ -1,0 +1,50 @@
+---
+- name: Validate Jenkins home path is explicitly configured
+  ansible.builtin.assert:
+    that:
+      - jenkins_home is defined
+      - (jenkins_home | string | trim | length) > 0
+      - (jenkins_home | string).startswith('/')
+    fail_msg: "jenkins_home must be explicitly configured as an absolute path."
+
+- name: Ensure Jenkins home directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_home }}"
+    state: directory
+    owner: "{{ jenkins_user_uid }}"
+    group: "{{ jenkins_user_gid }}"
+    mode: '0750'
+
+- name: Ensure Jenkins home ownership (recursive)
+  ansible.builtin.command:
+    cmd: >-
+      chown -R {{ jenkins_user_uid }}:{{ jenkins_user_gid }} {{ jenkins_home }}
+  changed_when: false
+
+- name: Set directory permissions under Jenkins home (750) excluding .ssh
+  ansible.builtin.command: >-
+    find {{ jenkins_home }} -path '{{ jenkins_home }}/.ssh' -prune -o -type d -not -name '*-atomic*' -exec chmod 750 {} +
+  changed_when: false
+
+- name: Set file permissions under Jenkins home (640) excluding .ssh
+  ansible.builtin.command: >-
+    find {{ jenkins_home }}
+    \( -path '{{ jenkins_home }}/.ssh' -o -path '{{ jenkins_agent_hosts_git_key_stage_path | default(jenkins_home ~ "/git_id_ed25519") }}' \)
+    -prune -o -type f -not -name '*-atomic*' -exec chmod 640 {} +
+  changed_when: false
+
+- name: Stat critical Jenkins files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ jenkins_home }}/config.xml"
+    - "{{ jenkins_home }}/credentials.xml"
+  register: jenkins_critical_stats
+
+- name: Ensure critical Jenkins files are readable by owner (config.xml, credentials.xml)
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    mode: '0640'
+  loop: "{{ jenkins_critical_stats.results | default([]) }}"
+  when:
+    - item.stat.exists
