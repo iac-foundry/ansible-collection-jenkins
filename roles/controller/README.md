@@ -14,9 +14,16 @@ Reusable Jenkins controller role for multi-organization environments.
 Optional integrations are enabled only when explicitly configured:
 
 - `jenkins_proxy_enabled`: integrate with a host proxy role (recommended as a separate shared role, for example in `blueprint.common`).
-- `jenkins_vault_secrets_enabled`: enable Vault-backed JCasC secret materialization.
 - `jenkins_oidc_enabled`: enable OIDC security realm.
+- `jenkins_escape_hatch_enabled`: enable local emergency admin.
 - `jenkins_mailer_enabled`: enable SMTP mailer configuration.
+
+Secret sourcing is explicit and caller-controlled:
+
+- OIDC: `jenkins_oidc_secret_source` in `vars|env|vault`
+- Escape hatch: `jenkins_escape_hatch_secret_source` in `vars|env|vault`
+
+For `vault` source, caller supplies Vault address/path variables; no platform-specific paths are hardcoded.
 
 ## Consumer responsibilities
 

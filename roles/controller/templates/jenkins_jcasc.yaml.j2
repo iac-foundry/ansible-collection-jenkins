@@ -26,7 +26,7 @@ jenkins:
         - escapeHatch:
             username: "{{ jenkins_escape_hatch_username }}"
             secret: "${jenkins-escape-hatch-password}"
-            group: "app-jenkins-admin"
+            group: "{{ jenkins_escape_hatch_group }}"
 {% endif %}
 
   authorizationStrategy:
@@ -37,7 +37,7 @@ jenkins:
             permissions:
               - "Overall/Administer"
             entries:
-              - group: "app-jenkins-admin"
+              - group: "{{ jenkins_admin_group }}"
           - name: "global-read"
             permissions:
               - "Overall/Read"

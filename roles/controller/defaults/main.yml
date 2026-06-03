@@ -13,7 +13,6 @@ jenkins_user_gid: "1000"
 jenkins_docker_gid: ""
 jenkins_proxy_enabled: false
 jenkins_mailer_enabled: false
-jenkins_vault_secrets_enabled: false
 jenkins_proxy_legacy_container_name: "jenkins-nginx-proxy"
 jenkins_proxy_container_name: "{{ host_proxy_container_name | default('host-proxy') }}"
 jenkins_proxy_config_dir: "{{ host_proxy_config_dir | default('/opt/docker_volumes/host-proxy/conf.d') }}"
@@ -21,10 +20,15 @@ jenkins_proxy_ssl_dir: "{{ (host_proxy_ssl_dir | default('/opt/docker_volumes/ho
 jenkins_proxy_vhost_filename: "10-jenkins.conf"
 jenkins_proxy_server_name: "jenkins.internal"
 jenkins_proxy_upstream: "http://127.0.0.1:{{ jenkins_http_port | default(8081) }}"
-jenkins_proxy_tls_vault_path: "kv/platform/pki/jenkins-cert"
+jenkins_proxy_tls_source: "provided" # allowed: provided, vault
+jenkins_proxy_tls_vault_path: ""
 jenkins_proxy_tls_cert_field: "cert"
 jenkins_proxy_tls_key_field: "key"
 jenkins_proxy_tls_ca_field: "ca"
+jenkins_proxy_tls_cert_pem: ""
+jenkins_proxy_tls_key_pem: ""
+jenkins_proxy_tls_ca_pem: ""
+jenkins_proxy_install_ca_into_host_trust: false
 
 # Path to the internal CA certificate on the managed host. This cert is copied into
 # the Docker build context and imported into the Jenkins JVM truststore so Jenkins
@@ -66,33 +70,36 @@ jenkins_jobdsl_pipelines: []
 # directory at deploy time; never stored in plaintext config files.
 jenkins_oidc_enabled: false
 jenkins_oidc_well_known_url: "https://auth.internal/application/o/jenkins/.well-known/openid-configuration"
-# Authentik 2026.x documents group membership as part of the default `profile`
-# scope, so no separate custom `groups` scope is requested here.
 jenkins_oidc_scopes: "openid profile email"
-# Use the OIDC-required `sub` claim for Jenkins usernames. Authentik does not
-# reliably emit `preferred_username` for all user types, and Jenkins rejects an
-# empty username during login.
 jenkins_oidc_username_field: "sub"
 jenkins_oidc_full_name_field: "name"
 jenkins_oidc_email_field: "email"
 jenkins_oidc_groups_field: "groups"
+jenkins_admin_group: "jenkins-admin"
 
-# Vault path where the Authentik role writes the Jenkins OIDC client credentials.
-# Set by iotel.security.authentik role via authentik_oidc_providers[].vault_client_secret_path.
-jenkins_vault_oidc_path: "kv/platform/jenkins/oidc"
+# OIDC secret source controls (allowed: vars, env, vault)
+jenkins_oidc_secret_source: "vars"
+jenkins_oidc_client_id: ""
+jenkins_oidc_client_secret: ""
+jenkins_oidc_client_id_env_var: "JENKINS_OIDC_CLIENT_ID"
+jenkins_oidc_client_secret_env_var: "JENKINS_OIDC_CLIENT_SECRET"
+
+# Optional Vault secret source settings
+jenkins_vault_addr: ""
+jenkins_vault_token_file: ""
+jenkins_vault_oidc_path: ""
 jenkins_vault_oidc_client_id_field: "client_id"
 jenkins_vault_oidc_client_secret_field: "client_secret"
 
-# Vault connectivity for the Jenkins host (orchestration host with vault-agent).
-jenkins_vault_addr: "{{ vault_local_addr | default(vault_addr) }}"
-jenkins_vault_token_file: "{{ vault_client_agent_sink_path | default('/var/lib/vault-agent/agent-token') }}"
-
 # --- Escape hatch local admin ---
-# A local Jenkins account for emergency access when Authentik is unavailable.
-# Password is generated on first run and stored in Vault.
 jenkins_escape_hatch_enabled: false
 jenkins_escape_hatch_username: "jenkins-local-admin"
-jenkins_vault_escape_hatch_path: "kv/platform/jenkins/escape-hatch"
+jenkins_escape_hatch_group: "{{ jenkins_admin_group }}"
+jenkins_escape_hatch_secret_source: "vars" # allowed: vars, env, vault
+jenkins_escape_hatch_password: ""
+jenkins_escape_hatch_password_env_var: "JENKINS_ESCAPE_HATCH_PASSWORD"
+jenkins_escape_hatch_generate_if_missing: false
+jenkins_vault_escape_hatch_path: ""
 jenkins_vault_escape_hatch_field: "password"
 
 # --- JCasC secrets directory ---

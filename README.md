@@ -14,6 +14,14 @@ without SSL/Vault/OIDC/SMTP. Optional integrations are enabled by explicit flags
 Companion integrations (for example host proxy lifecycle) should live in dedicated
 shared roles/collections, rather than being hard-wired into the base controller role.
 
+Secrets are source-flexible and caller-driven:
+
+- direct variables
+- environment variables
+- Vault (optional)
+
+Consumer repos choose the source; the collection does not force a specific secret backend.
+
 ## Reuse Contract
 
 This repository is intentionally product-generic.

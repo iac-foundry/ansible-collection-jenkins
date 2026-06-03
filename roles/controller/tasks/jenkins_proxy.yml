@@ -32,22 +32,41 @@
       - jenkins_proxy_config_dir_stat.stat.isdir
     fail_msg: >-
       Shared host proxy baseline is not ready (missing {{ jenkins_proxy_config_dir }}).
-      Run baseline with iotel.common.host_proxy before running Jenkins.
+      Run baseline host-proxy role before running Jenkins proxy integration.
   when: jenkins_proxy_enabled | bool
 
-- name: Verify Vault CLI connectivity via local Vault Agent for Jenkins TLS fetch
+- name: Validate Jenkins proxy TLS source option
+  ansible.builtin.assert:
+    that:
+      - jenkins_proxy_tls_source in ['provided', 'vault']
+    fail_msg: >-
+      Invalid jenkins_proxy_tls_source '{{ jenkins_proxy_tls_source }}'.
+      Allowed values: provided, vault.
+  when: jenkins_proxy_enabled | bool
+
+- name: Verify Vault CLI connectivity for Jenkins proxy TLS fetch
   ansible.builtin.command:
-    argv:
-      - vault
-      - status
+    argv: [vault, status]
   environment:
-    VAULT_ADDR: "{{ vault_local_addr | default('http://127.0.0.1:8100') }}"
+    VAULT_ADDR: "{{ jenkins_vault_addr | default(vault_local_addr | default('http://127.0.0.1:8100')) }}"
     VAULT_CACERT: "{{ vault_client_cacert | default('') }}"
     VAULT_SKIP_VERIFY: "{{ 'true' if (vault_client_tls_skip_verify | default(false)) else 'false' }}"
   register: jenkins_proxy_vault_status
   changed_when: false
   failed_when: jenkins_proxy_vault_status.rc != 0
-  when: jenkins_proxy_enabled | bool
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_tls_source == 'vault'
+
+- name: Assert proxy Vault path is provided for vault TLS source
+  ansible.builtin.assert:
+    that:
+      - (jenkins_proxy_tls_vault_path | default('') | string | trim | length) > 0
+    fail_msg: >-
+      jenkins_proxy_tls_source=vault requires jenkins_proxy_tls_vault_path.
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_tls_source == 'vault'
 
 - name: Fetch Jenkins TLS secret bundle from Vault
   ansible.builtin.command:
@@ -58,38 +77,37 @@
       - -format=json
       - "{{ jenkins_proxy_tls_vault_path }}"
   environment:
-    VAULT_ADDR: "{{ vault_local_addr | default('http://127.0.0.1:8100') }}"
+    VAULT_ADDR: "{{ jenkins_vault_addr | default(vault_local_addr | default('http://127.0.0.1:8100')) }}"
     VAULT_CACERT: "{{ vault_client_cacert | default('') }}"
     VAULT_SKIP_VERIFY: "{{ 'true' if (vault_client_tls_skip_verify | default(false)) else 'false' }}"
   register: jenkins_proxy_tls_secret_raw
   changed_when: false
   no_log: true
-  when: jenkins_proxy_enabled | bool
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_tls_source == 'vault'
 
-- name: Parse Jenkins TLS secret bundle
+- name: Parse and extract Jenkins TLS PEM material from Vault
   ansible.builtin.set_fact:
     jenkins_proxy_tls_secret: "{{ (jenkins_proxy_tls_secret_raw.stdout | from_json).data.data }}"
+    jenkins_proxy_tls_cert_pem: "{{ ((jenkins_proxy_tls_secret_raw.stdout | from_json).data.data)[jenkins_proxy_tls_cert_field] | default('') | string | trim }}"
+    jenkins_proxy_tls_key_pem: "{{ ((jenkins_proxy_tls_secret_raw.stdout | from_json).data.data)[jenkins_proxy_tls_key_field] | default('') | string | trim }}"
+    jenkins_proxy_tls_ca_pem: "{{ ((jenkins_proxy_tls_secret_raw.stdout | from_json).data.data)[jenkins_proxy_tls_ca_field] | default('') | string | trim }}"
   no_log: true
-  when: jenkins_proxy_enabled | bool
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_tls_source == 'vault'
 
-- name: Extract Jenkins TLS PEM material from Vault
-  ansible.builtin.set_fact:
-    jenkins_proxy_tls_cert_pem: "{{ jenkins_proxy_tls_secret[jenkins_proxy_tls_cert_field] | default('') | string | trim }}"
-    jenkins_proxy_tls_key_pem: "{{ jenkins_proxy_tls_secret[jenkins_proxy_tls_key_field] | default('') | string | trim }}"
-    jenkins_proxy_tls_ca_pem: "{{ jenkins_proxy_tls_secret[jenkins_proxy_tls_ca_field] | default('') | string | trim }}"
-  no_log: true
-  when: jenkins_proxy_enabled | bool
-
-- name: Assert Jenkins TLS secret contains required fields
+- name: Assert Jenkins TLS material is provided
   ansible.builtin.assert:
     that:
-      - (jenkins_proxy_tls_cert_pem | default('') | trim | length) > 0
-      - (jenkins_proxy_tls_key_pem | default('') | trim | length) > 0
-      - (jenkins_proxy_tls_ca_pem | default('') | trim | length) > 0
+      - (jenkins_proxy_tls_cert_pem | default('') | string | trim | length) > 0
+      - (jenkins_proxy_tls_key_pem | default('') | string | trim | length) > 0
+      - (jenkins_proxy_tls_ca_pem | default('') | string | trim | length) > 0
     fail_msg: >-
-      Vault secret {{ jenkins_proxy_tls_vault_path }} must contain non-empty values in
-      {{ jenkins_proxy_tls_cert_field }}, {{ jenkins_proxy_tls_key_field }}, and
-      {{ jenkins_proxy_tls_ca_field }}. Values must be valid PEM (validated in following tasks).
+      Jenkins proxy TLS requires non-empty cert/key/ca PEM values.
+      Provide via vars (jenkins_proxy_tls_*_pem) or set jenkins_proxy_tls_source=vault
+      with valid Vault path and fields.
   when: jenkins_proxy_enabled | bool
 
 - name: Validate and install Jenkins nginx TLS assets
@@ -191,9 +209,6 @@
       when: (jenkins_proxy_tls_temp_dir.path | default('') | length) > 0
       changed_when: false
 
-# Install the CA into the system trust store BEFORE the container starts and the
-# healthcheck runs. This means validate_certs: true will work automatically on
-# every subsequent run without manual toggling.
 - name: Install Jenkins proxy CA into system trust store
   ansible.builtin.copy:
     content: "{{ jenkins_proxy_tls_ca_pem }}\n"
@@ -203,15 +218,17 @@
     mode: '0644'
   become: true
   notify: Refresh system CA trust store after Jenkins proxy CA install
-  when: jenkins_proxy_enabled | bool and (jenkins_proxy_tls_ca_pem | default('') | trim | length) > 0
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_install_ca_into_host_trust | default(false) | bool
+    - (jenkins_proxy_tls_ca_pem | default('') | trim | length) > 0
 
 - name: Flush handlers so CA trust is updated before HTTPS validation
   ansible.builtin.meta: flush_handlers
-  when: jenkins_proxy_enabled | bool
+  when:
+    - jenkins_proxy_enabled | bool
+    - jenkins_proxy_install_ca_into_host_trust | default(false) | bool
 
-# Note: jenkins.iotel.internal hostname resolution on the build host is owned by
-# the SOE role via soe_hosts_entries_from_dnsmasq (group_vars/all/main.yml).
-# SOE runs before this role and seeds /etc/hosts from dnsmasq_server_address_mappings.
 - name: Deploy Jenkins nginx proxy configuration
   ansible.builtin.template:
     src: jenkins_proxy.conf.j2

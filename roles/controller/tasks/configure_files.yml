@@ -35,10 +35,12 @@
 
 # Inject Vault-backed secrets into the JCasC secrets directory before rendering
 # the JCasC template. JCasC resolves ${VAR_NAME} from files in CASC_SECRETS_PATH.
-- name: Include Jenkins Vault secret injection
+- name: Include Jenkins secret resolution and JCasC secret file materialization
   ansible.builtin.include_tasks: vault_secrets.yml
-  when: jenkins_vault_secrets_enabled | default(false) | bool
-  tags: [vault, config]
+  when: >-
+    (jenkins_oidc_enabled | default(false) | bool)
+    or (jenkins_escape_hatch_enabled | default(false) | bool)
+  tags: [secrets, config]
 
 - name: Deploy Jenkins JCasC definition
   ansible.builtin.template:
