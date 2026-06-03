@@ -72,6 +72,7 @@ unclassified:
   location:
     url: "{{ jenkins_root_url }}"
 
+{% if jenkins_mailer_enabled | default(false) | bool %}
   mailer:
     smtpHost: "{{ jenkins_smtp_host }}"
     smtpPort: "{{ jenkins_smtp_port }}"
@@ -83,6 +84,7 @@ unclassified:
 {% endif %}
     replyToAddress: "{{ jenkins_admin_email }}"
     charset: "UTF-8"
+{% endif %}
 
 {% if (jenkins_global_shared_libraries | default([]) | length) > 0 %}
   globalLibraries:

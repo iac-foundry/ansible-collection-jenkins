@@ -9,6 +9,11 @@ This collection provides reusable Jenkins automation for multi-organization use:
 - `roles/controller`: Jenkins controller lifecycle automation
 - `roles/agent`: Jenkins inbound agent lifecycle automation
 
+The controller role follows a minimal-first model and can stand up a base controller
+without SSL/Vault/OIDC/SMTP. Optional integrations are enabled by explicit flags.
+Companion integrations (for example host proxy lifecycle) should live in dedicated
+shared roles/collections, rather than being hard-wired into the base controller role.
+
 ## Reuse Contract
 
 This repository is intentionally product-generic.

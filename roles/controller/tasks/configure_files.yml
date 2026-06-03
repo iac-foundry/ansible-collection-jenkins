@@ -37,7 +37,7 @@
 # the JCasC template. JCasC resolves ${VAR_NAME} from files in CASC_SECRETS_PATH.
 - name: Include Jenkins Vault secret injection
   ansible.builtin.include_tasks: vault_secrets.yml
-  when: jenkins_oidc_enabled | default(false) | bool
+  when: jenkins_vault_secrets_enabled | default(false) | bool
   tags: [vault, config]
 
 - name: Deploy Jenkins JCasC definition

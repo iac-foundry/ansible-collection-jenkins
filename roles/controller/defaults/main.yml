@@ -12,6 +12,8 @@ jenkins_user_uid: "1000"
 jenkins_user_gid: "1000"
 jenkins_docker_gid: ""
 jenkins_proxy_enabled: false
+jenkins_mailer_enabled: false
+jenkins_vault_secrets_enabled: false
 jenkins_proxy_legacy_container_name: "jenkins-nginx-proxy"
 jenkins_proxy_container_name: "{{ host_proxy_container_name | default('host-proxy') }}"
 jenkins_proxy_config_dir: "{{ host_proxy_config_dir | default('/opt/docker_volumes/host-proxy/conf.d') }}"
@@ -62,7 +64,7 @@ jenkins_jobdsl_pipelines: []
 # Enables oic-auth plugin security realm backed by Authentik.
 # Client credentials are read from Vault and injected into the JCasC secrets
 # directory at deploy time; never stored in plaintext config files.
-jenkins_oidc_enabled: true
+jenkins_oidc_enabled: false
 jenkins_oidc_well_known_url: "https://auth.internal/application/o/jenkins/.well-known/openid-configuration"
 # Authentik 2026.x documents group membership as part of the default `profile`
 # scope, so no separate custom `groups` scope is requested here.
@@ -88,7 +90,7 @@ jenkins_vault_token_file: "{{ vault_client_agent_sink_path | default('/var/lib/v
 # --- Escape hatch local admin ---
 # A local Jenkins account for emergency access when Authentik is unavailable.
 # Password is generated on first run and stored in Vault.
-jenkins_escape_hatch_enabled: true
+jenkins_escape_hatch_enabled: false
 jenkins_escape_hatch_username: "jenkins-local-admin"
 jenkins_vault_escape_hatch_path: "kv/platform/jenkins/escape-hatch"
 jenkins_vault_escape_hatch_field: "password"
