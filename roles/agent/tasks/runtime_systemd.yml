@@ -1,0 +1,97 @@
+---
+# Systemd mode: install JRE, create jenkins user, write secret env file,
+# deploy the agent.jar and systemd service unit, then start the service.
+
+- name: Install JRE for Jenkins inbound agent
+  ansible.builtin.apt:
+    name: "{{ jenkins_agent_hosts_java_package }}"
+    state: present
+    update_cache: true
+  become: true
+
+- name: Ensure jenkins group exists
+  ansible.builtin.group:
+    name: "{{ jenkins_agent_hosts_systemd_group }}"
+    system: true
+    state: present
+  become: true
+
+- name: Ensure jenkins user exists
+  ansible.builtin.user:
+    name: "{{ jenkins_agent_hosts_systemd_user }}"
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ jenkins_agent_hosts_systemd_install_dir }}"
+    create_home: false
+    state: present
+  become: true
+
+- name: Create Jenkins agent install directory
+  ansible.builtin.file:
+    path: "{{ jenkins_agent_hosts_systemd_install_dir }}"
+    state: directory
+    owner: "{{ jenkins_agent_hosts_systemd_user }}"
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    mode: '0755'
+  become: true
+
+- name: Create Jenkins agent workspace directory
+  ansible.builtin.file:
+    path: "{{ jenkins_agent_hosts_remote_fs }}"
+    state: directory
+    owner: "{{ jenkins_agent_hosts_systemd_user }}"
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    mode: '0750'
+  become: true
+
+- name: Create Jenkins agent secret directory
+  ansible.builtin.file:
+    path: "{{ jenkins_agent_hosts_systemd_env_dir }}"
+    state: directory
+    owner: root
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    mode: '0750'
+  become: true
+
+- name: Download Jenkins agent.jar from controller
+  ansible.builtin.get_url:
+    url: "{{ jenkins_agent_hosts_controller_url }}/jnlpJars/agent.jar"
+    dest: "{{ jenkins_agent_hosts_systemd_install_dir }}/agent.jar"
+    owner: "{{ jenkins_agent_hosts_systemd_user }}"
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    mode: '0644'
+    validate_certs: "{{ jenkins_agent_hosts_controller_validate_tls | bool }}"
+  become: true
+  notify: Restart Jenkins inbound agent (systemd)
+
+- name: Write Jenkins agent secret environment file
+  ansible.builtin.template:
+    src: jenkins-agent.env.j2
+    dest: "{{ jenkins_agent_hosts_systemd_env_dir }}/{{ jenkins_agent_hosts_node_local.name }}.env"
+    owner: root
+    group: "{{ jenkins_agent_hosts_systemd_group }}"
+    mode: '0640'
+  become: true
+  no_log: true
+  notify: Restart Jenkins inbound agent (systemd)
+
+- name: Deploy Jenkins inbound agent systemd service unit
+  ansible.builtin.template:
+    src: jenkins-agent.service.j2
+    dest: "/etc/systemd/system/{{ jenkins_agent_hosts_systemd_service_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+  notify:
+    - Reload systemd daemon
+    - Restart Jenkins inbound agent (systemd)
+
+- name: Enable and start Jenkins inbound agent service
+  ansible.builtin.systemd:
+    name: "{{ jenkins_agent_hosts_systemd_service_name }}"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

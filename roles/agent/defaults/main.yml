@@ -15,6 +15,14 @@ jenkins_agent_hosts_container_uid: "1000"
 jenkins_agent_hosts_container_gid: "1000"
 jenkins_agent_hosts_controller_url: "https://{{ jenkins_proxy_server_name }}"
 jenkins_agent_hosts_controller_mode: "container"
+
+# Systemd mode — only used when jenkins_agent_hosts_controller_mode == 'systemd'
+jenkins_agent_hosts_systemd_user: "jenkins"
+jenkins_agent_hosts_systemd_group: "jenkins"
+jenkins_agent_hosts_systemd_install_dir: "/opt/jenkins"
+jenkins_agent_hosts_systemd_env_dir: "/etc/jenkins-inbound-agent"
+jenkins_agent_hosts_systemd_service_name: "jenkins-inbound-agent"
+jenkins_agent_hosts_java_package: "openjdk-21-jre-headless"
 jenkins_agent_hosts_controller_validate_tls: true
 jenkins_agent_hosts_use_websocket: true
 jenkins_agent_hosts_ca_bootstrap_url: "http://vault.internal/root_ca.crt"

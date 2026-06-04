@@ -1,17 +1,30 @@
 ---
-- name: Preflight checks, variable resolution, and container identity facts
+- name: Preflight checks, variable resolution, and agent identity facts
   ansible.builtin.import_tasks: preflight.yml
 
 - name: Derive per-node inbound agent secret from Jenkins controller state
   ansible.builtin.import_tasks: controller_secret.yml
 
+# Container mode — build image, stage SSH material, run container
 - name: Stage Git SSH known_hosts and private key for agent container
   ansible.builtin.import_tasks: git_ssh_material.yml
+  when:
+    - jenkins_agent_hosts_controller_mode == 'container'
+    - not (jenkins_agent_hosts_skip_self_host_runtime_mutation | default(false) | bool)
 
 - name: Build inbound Jenkins worker image with required tooling
   ansible.builtin.import_tasks: image_build.yml
-  when: not (jenkins_agent_hosts_skip_self_host_runtime_mutation | default(false) | bool)
+  when:
+    - jenkins_agent_hosts_controller_mode == 'container'
+    - not (jenkins_agent_hosts_skip_self_host_runtime_mutation | default(false) | bool)
 
 - name: Run inbound Jenkins worker container
   ansible.builtin.import_tasks: runtime_container.yml
-  when: not (jenkins_agent_hosts_skip_self_host_runtime_mutation | default(false) | bool)
+  when:
+    - jenkins_agent_hosts_controller_mode == 'container'
+    - not (jenkins_agent_hosts_skip_self_host_runtime_mutation | default(false) | bool)
+
+# Systemd mode — install Java, write env file, deploy and start service unit
+- name: Deploy Jenkins inbound agent as systemd service
+  ansible.builtin.import_tasks: runtime_systemd.yml
+  when: jenkins_agent_hosts_controller_mode == 'systemd'

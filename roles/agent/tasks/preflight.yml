@@ -1,12 +1,16 @@
 ---
 # Preflight: install host dependencies, validate variables, resolve controller
-# hostname and IP, and compute per-container facts (name, remoteFS, tmpfs).
+# hostname and IP, and compute per-agent facts (name, remoteFS, tmpfs).
+# Container-specific facts are guarded by jenkins_agent_hosts_controller_mode.
 
 - name: Install host dependencies for inbound Jenkins workers
   ansible.builtin.apt:
-    name:
-      - ca-certificates
-      - python3-docker
+    name: >-
+      {{
+        ['ca-certificates', 'python3-docker']
+        if jenkins_agent_hosts_controller_mode == 'container'
+        else ['ca-certificates']
+      }}
     state: present
     update_cache: true
 
@@ -45,9 +49,8 @@
       for {{ inventory_hostname }}. Define a matching node entry before enabling inbound workers.
   when: jenkins_agent_hosts_node_local.name is not defined
 
-- name: Set inbound container identity facts
+- name: Set common agent identity facts (all modes)
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_container_name: "{{ jenkins_agent_hosts_container_name_prefix }}-{{ inventory_hostname }}"
     jenkins_agent_hosts_remote_fs: "{{ jenkins_agent_hosts_node_local.remote_fs | default('/home/jenkins/agent') }}"
     jenkins_agent_hosts_controller_hostname: >-
       {{
@@ -56,6 +59,11 @@
         | regex_replace('/.*$', '')
         | regex_replace(':.*$', '')
       }}
+
+- name: Set container-specific identity facts
+  ansible.builtin.set_fact:
+    jenkins_agent_hosts_container_name: "{{ jenkins_agent_hosts_container_name_prefix }}-{{ inventory_hostname }}"
+  when: jenkins_agent_hosts_controller_mode == 'container'
 
 - name: Derive Jenkins runtime self-host skip flag
   ansible.builtin.set_fact:
@@ -93,8 +101,6 @@
   when: (jenkins_agent_hosts_controller_ip | default('') | trim) == ''
 
 - name: Fail when Jenkins controller hostname cannot be resolved
-  # Temporarily make this a non-fatal warning to allow troubleshooting runs.
-  # Original behavior: ansible.builtin.fail (see git history) — reinstated after debugging.
   ansible.builtin.debug:
     msg: >-
       WARNING: Jenkins controller host {{ jenkins_agent_hosts_controller_hostname }}
@@ -126,6 +132,7 @@
         {(jenkins_agent_hosts_controller_hostname): (jenkins_agent_hosts_controller_ip)}
         | combine(jenkins_agent_hosts_static_etc_hosts | default({}), recursive=False)
       }}
+  when: jenkins_agent_hosts_controller_mode == 'container'
 
 - name: Build workspace tmpfs mount options for inbound agent
   ansible.builtin.set_fact:
@@ -136,15 +143,19 @@
         ',gid=' ~ jenkins_agent_hosts_container_gid ~
         ',mode=0770,exec'
       }}
+  when: jenkins_agent_hosts_controller_mode == 'container'
 
 - name: Check infrastructure SSH private key exists on host
   ansible.builtin.stat:
     path: "{{ jenkins_agent_hosts_infra_key_src_path }}"
   register: jenkins_agent_hosts_infra_ssh_key_stat
+  when: jenkins_agent_hosts_controller_mode == 'container'
 
 - name: Fail when infrastructure SSH private key is missing on host
   ansible.builtin.fail:
     msg: >-
       Required infrastructure SSH private key is missing on host: {{ jenkins_agent_hosts_infra_key_src_path }}.
       This key is mounted into the Jenkins worker container for Ansible SSH connectivity.
-  when: not (jenkins_agent_hosts_infra_ssh_key_stat.stat.exists | default(false))
+  when:
+    - jenkins_agent_hosts_controller_mode == 'container'
+    - not (jenkins_agent_hosts_infra_ssh_key_stat.stat.exists | default(false))
