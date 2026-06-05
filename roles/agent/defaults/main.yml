@@ -25,7 +25,7 @@ jenkins_agent_hosts_systemd_service_name: "jenkins-inbound-agent"
 jenkins_agent_hosts_java_package: "openjdk-21-jre-headless"
 jenkins_agent_hosts_controller_validate_tls: true
 jenkins_agent_hosts_use_websocket: true
-jenkins_agent_hosts_ca_bootstrap_url: "http://vault.internal/root_ca.crt"
+jenkins_agent_hosts_ca_bootstrap_url: "http://vault.iotel.internal/root_ca.crt"
 jenkins_agent_hosts_ca_cert_alias: "platform-step-ca-root"
 jenkins_agent_hosts_ca_truststore_password: "changeit"
 # Vault address reachable from inside the agent container.
