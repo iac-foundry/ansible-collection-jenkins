@@ -17,6 +17,8 @@ jenkins_agent_controller_url: "https://{{ jenkins_proxy_server_name }}"
 jenkins_agent_controller_mode: "container"
 
 # Systemd mode — only used when jenkins_agent_controller_mode == 'systemd'
+jenkins_agent_deploy_private_key: ""
+jenkins_agent_deploy_key_path: "{{ jenkins_agent_systemd_install_dir }}/.ssh/id_ed25519_infraops"
 jenkins_agent_systemd_user: "jenkins"
 jenkins_agent_systemd_group: "jenkins"
 jenkins_agent_systemd_install_dir: "/opt/jenkins"
