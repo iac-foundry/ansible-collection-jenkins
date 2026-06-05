@@ -22,6 +22,9 @@ jenkins_agent_controller_mode: "container"
 jenkins_agent_ssh_known_hosts: []
 jenkins_agent_deploy_private_key: ""
 jenkins_agent_deploy_key_path: "{{ jenkins_agent_systemd_install_dir }}/.ssh/id_ed25519_infraops"
+# Default git key path matches container convention so declarative SCM checkout
+# works without credentials. Set empty to skip writing a second copy.
+jenkins_agent_git_key_path: "{{ jenkins_agent_systemd_install_dir }}/.ssh/id_ed25519"
 jenkins_agent_systemd_user: "jenkins"
 jenkins_agent_systemd_group: "jenkins"
 jenkins_agent_systemd_install_dir: "/opt/jenkins"
