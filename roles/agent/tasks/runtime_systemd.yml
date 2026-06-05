@@ -45,6 +45,16 @@
     mode: '0700'
   become: true
 
+- name: Populate system SSH known_hosts for configured Git hosting providers
+  ansible.builtin.known_hosts:
+    name: "{{ item }}"
+    path: /etc/ssh/ssh_known_hosts
+    state: present
+    key: "{{ lookup('pipe', 'ssh-keyscan -H ' + item + ' 2>/dev/null') }}"
+  loop: "{{ jenkins_agent_ssh_known_hosts }}"
+  become: true
+  when: jenkins_agent_ssh_known_hosts | length > 0
+
 - name: Write deployment SSH private key for Jenkins executor
   ansible.builtin.copy:
     content: "{{ jenkins_agent_deploy_private_key }}"
