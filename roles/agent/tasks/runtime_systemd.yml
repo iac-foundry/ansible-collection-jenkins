@@ -57,7 +57,7 @@
 
 - name: Write deployment SSH private key for Jenkins executor
   ansible.builtin.copy:
-    content: "{{ jenkins_agent_deploy_private_key }}"
+    content: "{{ jenkins_agent_deploy_private_key | trim }}\n"
     dest: "{{ jenkins_agent_deploy_key_path }}"
     owner: "{{ jenkins_agent_systemd_user }}"
     group: "{{ jenkins_agent_systemd_group }}"
@@ -68,7 +68,7 @@
 
 - name: Write git SSH private key for declarative SCM checkout
   ansible.builtin.copy:
-    content: "{{ jenkins_agent_deploy_private_key }}"
+    content: "{{ jenkins_agent_deploy_private_key | trim }}\n"
     dest: "{{ jenkins_agent_git_key_path }}"
     owner: "{{ jenkins_agent_systemd_user }}"
     group: "{{ jenkins_agent_systemd_group }}"
