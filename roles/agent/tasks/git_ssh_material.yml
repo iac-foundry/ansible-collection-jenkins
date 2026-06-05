@@ -21,7 +21,7 @@
       - bitbucket.org
       - -f
       - "{{ jenkins_home }}/git_known_hosts"
-  register: jenkins_agent_hosts_known_hosts_lookup
+  register: jenkins_agent_known_hosts_lookup
   changed_when: false
   failed_when: false
   become: true
@@ -41,72 +41,72 @@
     executable: /bin/bash
   become: true
   changed_when: true
-  when: (jenkins_agent_hosts_known_hosts_lookup.rc | default(1)) != 0
+  when: (jenkins_agent_known_hosts_lookup.rc | default(1)) != 0
   tags:
     - jenkins
     - ssh
 
 - name: Check host Git SSH private key path for inbound agent
   ansible.builtin.stat:
-    path: "{{ jenkins_agent_hosts_git_key_src_path }}"
-  register: jenkins_agent_hosts_git_key_stat
+    path: "{{ jenkins_agent_git_key_src_path }}"
+  register: jenkins_agent_git_key_stat
   become: true
 
 - name: Stage Git SSH private key from host path for inbound agent container
   ansible.builtin.copy:
-    src: "{{ jenkins_agent_hosts_git_key_src_path }}"
-    dest: "{{ jenkins_agent_hosts_git_key_stage_path }}"
-    owner: "{{ jenkins_agent_hosts_container_uid }}"
-    group: "{{ jenkins_agent_hosts_container_gid }}"
+    src: "{{ jenkins_agent_git_key_src_path }}"
+    dest: "{{ jenkins_agent_git_key_stage_path }}"
+    owner: "{{ jenkins_agent_container_uid }}"
+    group: "{{ jenkins_agent_container_gid }}"
     mode: '0600'
     remote_src: true
   become: true
-  register: jenkins_agent_hosts_git_key_stage_copy
+  register: jenkins_agent_git_key_stage_copy
   no_log: true
   when:
-    - jenkins_agent_hosts_git_key_stat.stat.exists | default(false)
-    - (jenkins_agent_hosts_git_key_stat.stat.size | default(0) | int) > 0
+    - jenkins_agent_git_key_stat.stat.exists | default(false)
+    - (jenkins_agent_git_key_stat.stat.size | default(0) | int) > 0
 
 - name: Fail when host Git SSH private key is missing
   ansible.builtin.fail:
     msg: >-
-      Host SSH key is missing at {{ jenkins_agent_hosts_git_key_src_path }}.
+      Host SSH key is missing at {{ jenkins_agent_git_key_src_path }}.
       Terraform cloud-init bootstrap must write this key on first boot.
   when: >-
-    not (jenkins_agent_hosts_git_key_stat.stat.exists | default(false)) or
-    (jenkins_agent_hosts_git_key_stat.stat.size | default(0) | int) == 0
+    not (jenkins_agent_git_key_stat.stat.exists | default(false)) or
+    (jenkins_agent_git_key_stat.stat.size | default(0) | int) == 0
 
 - name: Check staged Git SSH private key path for inbound agent container
   ansible.builtin.stat:
-    path: "{{ jenkins_agent_hosts_git_key_stage_path }}"
-  register: jenkins_agent_hosts_git_key_stage_stat
+    path: "{{ jenkins_agent_git_key_stage_path }}"
+  register: jenkins_agent_git_key_stage_stat
   become: true
 
 - name: Validate existing staged Git SSH private key
   ansible.builtin.command:
-    cmd: "ssh-keygen -y -f {{ jenkins_agent_hosts_git_key_stage_path }}"
-  register: jenkins_agent_hosts_git_key_stage_existing_validate
+    cmd: "ssh-keygen -y -f {{ jenkins_agent_git_key_stage_path }}"
+  register: jenkins_agent_git_key_stage_existing_validate
   changed_when: false
   failed_when: false
   no_log: true
   become: true
   when:
-    - jenkins_agent_hosts_git_key_stage_stat.stat.exists | default(false)
-    - (jenkins_agent_hosts_git_key_stage_stat.stat.size | default(0) | int) > 0
+    - jenkins_agent_git_key_stage_stat.stat.exists | default(false)
+    - (jenkins_agent_git_key_stage_stat.stat.size | default(0) | int) > 0
 
 - name: Remove invalid staged Git SSH private key before restage
   ansible.builtin.file:
-    path: "{{ jenkins_agent_hosts_git_key_stage_path }}"
+    path: "{{ jenkins_agent_git_key_stage_path }}"
     state: absent
   become: true
   when:
-    - jenkins_agent_hosts_git_key_stage_stat.stat.exists | default(false)
-    - (jenkins_agent_hosts_git_key_stage_existing_validate.rc | default(1)) != 0
+    - jenkins_agent_git_key_stage_stat.stat.exists | default(false)
+    - (jenkins_agent_git_key_stage_existing_validate.rc | default(1)) != 0
 
 - name: Validate staged Git SSH private key for inbound agent container
   ansible.builtin.command:
-    cmd: "ssh-keygen -y -f {{ jenkins_agent_hosts_git_key_stage_path }}"
-  register: jenkins_agent_hosts_git_key_stage_validate
+    cmd: "ssh-keygen -y -f {{ jenkins_agent_git_key_stage_path }}"
+  register: jenkins_agent_git_key_stage_validate
   changed_when: false
   failed_when: false
   no_log: true
@@ -115,7 +115,7 @@
 - name: Fail when staged Git SSH private key is missing or invalid
   ansible.builtin.fail:
     msg: >-
-      Staged Git SSH key at {{ jenkins_agent_hosts_git_key_stage_path }} is missing or invalid.
+      Staged Git SSH key at {{ jenkins_agent_git_key_stage_path }} is missing or invalid.
       Ensure Terraform cloud-init bootstrap wrote a valid key to
-      {{ jenkins_agent_hosts_git_key_src_path }}.
-  when: (jenkins_agent_hosts_git_key_stage_validate.rc | default(1)) != 0
+      {{ jenkins_agent_git_key_src_path }}.
+  when: (jenkins_agent_git_key_stage_validate.rc | default(1)) != 0

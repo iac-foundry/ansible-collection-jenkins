@@ -1,14 +1,14 @@
 ---
 # Preflight: install host dependencies, validate variables, resolve controller
 # hostname and IP, and compute per-agent facts (name, remoteFS, tmpfs).
-# Container-specific facts are guarded by jenkins_agent_hosts_controller_mode.
+# Container-specific facts are guarded by jenkins_agent_controller_mode.
 
 - name: Install host dependencies for inbound Jenkins workers
   ansible.builtin.apt:
     name: >-
       {{
         ['ca-certificates', 'python3-docker']
-        if jenkins_agent_hosts_controller_mode == 'container'
+        if jenkins_agent_controller_mode == 'container'
         else ['ca-certificates']
       }}
     state: present
@@ -18,10 +18,10 @@
   ansible.builtin.assert:
     that:
       - jenkins_agent_nodes is defined
-      - jenkins_agent_hosts_controller_url is defined
-      - jenkins_agent_hosts_controller_mode in ['container', 'systemd']
+      - jenkins_agent_controller_url is defined
+      - jenkins_agent_controller_mode in ['container', 'systemd']
       - jenkins_controller_host is defined
-      - (jenkins_agent_hosts_static_etc_hosts | default({})) is mapping
+      - (jenkins_agent_static_etc_hosts | default({})) is mapping
     fail_msg: >-
       Missing required inbound agent configuration variables.
       Configure controller URL, controller mode (container|systemd), controller host,
@@ -29,8 +29,8 @@
 
 - name: Resolve this host's Jenkins worker node definition
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_inventory_node_name: "{{ inventory_hostname | replace('_', '-') }}"
-    jenkins_agent_hosts_node_local: >-
+    jenkins_agent_inventory_node_name: "{{ inventory_hostname | replace('_', '-') }}"
+    jenkins_agent_node_local: >-
       {{
         (
           jenkins_agent_nodes | selectattr('host', 'equalto', ansible_host) | list | first
@@ -45,16 +45,16 @@
 - name: Fail when no Jenkins worker node matches this host address
   ansible.builtin.fail:
     msg: >-
-      No jenkins_agent_nodes entry maps to ansible_host={{ ansible_host }} or name={{ jenkins_agent_hosts_inventory_node_name }}
+      No jenkins_agent_nodes entry maps to ansible_host={{ ansible_host }} or name={{ jenkins_agent_inventory_node_name }}
       for {{ inventory_hostname }}. Define a matching node entry before enabling inbound workers.
-  when: jenkins_agent_hosts_node_local.name is not defined
+  when: jenkins_agent_node_local.name is not defined
 
 - name: Set common agent identity facts (all modes)
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_remote_fs: "{{ jenkins_agent_hosts_node_local.remote_fs | default('/home/jenkins/agent') }}"
-    jenkins_agent_hosts_controller_hostname: >-
+    jenkins_agent_remote_fs: "{{ jenkins_agent_node_local.remote_fs | default('/home/jenkins/agent') }}"
+    jenkins_agent_controller_hostname: >-
       {{
-        jenkins_agent_hosts_controller_url
+        jenkins_agent_controller_url
         | regex_replace('^https?://', '')
         | regex_replace('/.*$', '')
         | regex_replace(':.*$', '')
@@ -62,31 +62,31 @@
 
 - name: Set container-specific identity facts
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_container_name: "{{ jenkins_agent_hosts_container_name_prefix }}-{{ inventory_hostname }}"
-  when: jenkins_agent_hosts_controller_mode == 'container'
+    jenkins_agent_container_name: "{{ jenkins_agent_container_name_prefix }}-{{ inventory_hostname }}"
+  when: jenkins_agent_controller_mode == 'container'
 
 - name: Derive Jenkins runtime self-host skip flag
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_current_executor_node_name: "{{ lookup('env', 'NODE_NAME', default='') | trim }}"
-    jenkins_agent_hosts_skip_self_host_runtime_mutation: >-
+    jenkins_agent_current_executor_node_name: "{{ lookup('env', 'NODE_NAME', default='') | trim }}"
+    jenkins_agent_skip_self_host_runtime_mutation: >-
       {{
-        (jenkins_agent_hosts_skip_current_executor_host | bool)
+        (jenkins_agent_skip_current_executor_host | bool)
         and ((lookup('env', 'NODE_NAME', default='') | trim | length) > 0)
-        and ((lookup('env', 'NODE_NAME', default='') | trim) == (jenkins_agent_hosts_node_local.name | default('')))
+        and ((lookup('env', 'NODE_NAME', default='') | trim) == (jenkins_agent_node_local.name | default('')))
       }}
 
 - name: Warn when skipping self-host runtime mutation
   ansible.builtin.debug:
     msg: >-
       Skipping jenkins_agent_hosts image/container mutation on {{ inventory_hostname }} because
-      current Jenkins executor node is {{ jenkins_agent_hosts_current_executor_node_name }}.
+      current Jenkins executor node is {{ jenkins_agent_current_executor_node_name }}.
       This avoids self-disconnect and workspace loss during the active pipeline run.
-  when: jenkins_agent_hosts_skip_self_host_runtime_mutation | bool
+  when: jenkins_agent_skip_self_host_runtime_mutation | bool
   changed_when: false
 
 - name: Derive Jenkins controller IP from inventory when available
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_controller_ip: "{{ hostvars[jenkins_controller_host].ansible_host }}"
+    jenkins_agent_controller_ip: "{{ hostvars[jenkins_controller_host].ansible_host }}"
   when:
     - hostvars[jenkins_controller_host] is defined
     - hostvars[jenkins_controller_host].ansible_host is defined
@@ -94,68 +94,68 @@
 
 - name: Resolve Jenkins controller hostname from host resolver
   ansible.builtin.command: >-
-    getent hosts {{ jenkins_agent_hosts_controller_hostname }}
-  register: jenkins_agent_hosts_controller_resolve
+    getent hosts {{ jenkins_agent_controller_hostname }}
+  register: jenkins_agent_controller_resolve
   changed_when: false
   failed_when: false
-  when: (jenkins_agent_hosts_controller_ip | default('') | trim) == ''
+  when: (jenkins_agent_controller_ip | default('') | trim) == ''
 
 - name: Fail when Jenkins controller hostname cannot be resolved
   ansible.builtin.debug:
     msg: >-
-      WARNING: Jenkins controller host {{ jenkins_agent_hosts_controller_hostname }}
+      WARNING: Jenkins controller host {{ jenkins_agent_controller_hostname }}
       could not be resolved from {{ inventory_hostname }} — continuing for troubleshooting.
   when:
-    - (jenkins_agent_hosts_controller_ip | default('') | trim) == ''
-    - (jenkins_agent_hosts_controller_resolve.rc | default(1)) != 0
-      or (jenkins_agent_hosts_controller_resolve.stdout | trim) == ''
+    - (jenkins_agent_controller_ip | default('') | trim) == ''
+    - (jenkins_agent_controller_resolve.rc | default(1)) != 0
+      or (jenkins_agent_controller_resolve.stdout | trim) == ''
   changed_when: false
   failed_when: false
 
 - name: Set resolved Jenkins controller IP for container hosts mapping
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_controller_ip: >-
-      {{ (jenkins_agent_hosts_controller_resolve.stdout.split() | first) | default(jenkins_agent_hosts_controller_ip | default('')) }}
-  when: (jenkins_agent_hosts_controller_ip | default('') | trim) == ''
+    jenkins_agent_controller_ip: >-
+      {{ (jenkins_agent_controller_resolve.stdout.split() | first) | default(jenkins_agent_controller_ip | default('')) }}
+  when: (jenkins_agent_controller_ip | default('') | trim) == ''
 
 - name: Fail when resolved Jenkins controller IP is empty
   ansible.builtin.fail:
     msg: >-
-      Resolver output for {{ jenkins_agent_hosts_controller_hostname }} did not include an IP address.
-      Output={{ jenkins_agent_hosts_controller_resolve.stdout | default('') }}
-  when: (jenkins_agent_hosts_controller_ip | string | trim) == ''
+      Resolver output for {{ jenkins_agent_controller_hostname }} did not include an IP address.
+      Output={{ jenkins_agent_controller_resolve.stdout | default('') }}
+  when: (jenkins_agent_controller_ip | string | trim) == ''
 
 - name: Build container hosts mapping for Jenkins controller
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_container_etc_hosts: >-
+    jenkins_agent_container_etc_hosts: >-
       {{
-        {(jenkins_agent_hosts_controller_hostname): (jenkins_agent_hosts_controller_ip)}
-        | combine(jenkins_agent_hosts_static_etc_hosts | default({}), recursive=False)
+        {(jenkins_agent_controller_hostname): (jenkins_agent_controller_ip)}
+        | combine(jenkins_agent_static_etc_hosts | default({}), recursive=False)
       }}
-  when: jenkins_agent_hosts_controller_mode == 'container'
+  when: jenkins_agent_controller_mode == 'container'
 
 - name: Build workspace tmpfs mount options for inbound agent
   ansible.builtin.set_fact:
-    jenkins_agent_hosts_workspace_tmpfs_mount: >-
+    jenkins_agent_workspace_tmpfs_mount: >-
       {{
-        jenkins_agent_hosts_remote_fs ~ ':size=' ~ jenkins_agent_hosts_workspace_tmpfs_size ~
-        ',uid=' ~ jenkins_agent_hosts_container_uid ~
-        ',gid=' ~ jenkins_agent_hosts_container_gid ~
+        jenkins_agent_remote_fs ~ ':size=' ~ jenkins_agent_workspace_tmpfs_size ~
+        ',uid=' ~ jenkins_agent_container_uid ~
+        ',gid=' ~ jenkins_agent_container_gid ~
         ',mode=0770,exec'
       }}
-  when: jenkins_agent_hosts_controller_mode == 'container'
+  when: jenkins_agent_controller_mode == 'container'
 
 - name: Check infrastructure SSH private key exists on host
   ansible.builtin.stat:
-    path: "{{ jenkins_agent_hosts_infra_key_src_path }}"
-  register: jenkins_agent_hosts_infra_ssh_key_stat
-  when: jenkins_agent_hosts_controller_mode == 'container'
+    path: "{{ jenkins_agent_infra_key_src_path }}"
+  register: jenkins_agent_infra_ssh_key_stat
+  when: jenkins_agent_controller_mode == 'container'
 
 - name: Fail when infrastructure SSH private key is missing on host
   ansible.builtin.fail:
     msg: >-
-      Required infrastructure SSH private key is missing on host: {{ jenkins_agent_hosts_infra_key_src_path }}.
+      Required infrastructure SSH private key is missing on host: {{ jenkins_agent_infra_key_src_path }}.
       This key is mounted into the Jenkins worker container for Ansible SSH connectivity.
   when:
-    - jenkins_agent_hosts_controller_mode == 'container'
-    - not (jenkins_agent_hosts_infra_ssh_key_stat.stat.exists | default(false))
+    - jenkins_agent_controller_mode == 'container'
+    - not (jenkins_agent_infra_ssh_key_stat.stat.exists | default(false))

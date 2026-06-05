@@ -1,4 +1,4 @@
-FROM {{ jenkins_agent_hosts_base_image }}
+FROM {{ jenkins_agent_base_image }}
 
 USER root
 
@@ -21,16 +21,16 @@ RUN set -eux; \
     . /etc/os-release; \
     echo "deb [signed-by=/etc/apt/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/hashicorp.list; \
     apt-get update; \
-{% if jenkins_agent_hosts_install_hashicorp_tools | bool and jenkins_agent_hosts_install_terraform | bool and jenkins_agent_hosts_install_packer | bool %}
+{% if jenkins_agent_install_hashicorp_tools | bool and jenkins_agent_install_terraform | bool and jenkins_agent_install_packer | bool %}
     apt-get install -y --no-install-recommends terraform packer vault; \
-{% elif jenkins_agent_hosts_install_hashicorp_tools | bool and jenkins_agent_hosts_install_terraform | bool %}
+{% elif jenkins_agent_install_hashicorp_tools | bool and jenkins_agent_install_terraform | bool %}
     apt-get install -y --no-install-recommends terraform vault; \
-{% elif jenkins_agent_hosts_install_hashicorp_tools | bool and jenkins_agent_hosts_install_packer | bool %}
+{% elif jenkins_agent_install_hashicorp_tools | bool and jenkins_agent_install_packer | bool %}
     apt-get install -y --no-install-recommends packer vault; \
 {% else %}
     apt-get install -y --no-install-recommends vault; \
 {% endif %}
-    python3 -m pip install --no-cache-dir --break-system-packages ansible-core=={{ jenkins_agent_hosts_ansible_core_version }}; \
+    python3 -m pip install --no-cache-dir --break-system-packages ansible-core=={{ jenkins_agent_ansible_core_version }}; \
     rm -rf /var/lib/apt/lists/*
 
 USER jenkins

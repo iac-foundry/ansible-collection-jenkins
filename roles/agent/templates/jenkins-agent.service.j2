@@ -1,29 +1,29 @@
 [Unit]
-Description=Jenkins Inbound Agent - {{ jenkins_agent_hosts_node_local.name }}
+Description=Jenkins Inbound Agent - {{ jenkins_agent_node_local.name }}
 Documentation=https://www.jenkins.io/doc/book/using/using-agents/
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=simple
-User={{ jenkins_agent_hosts_systemd_user }}
-Group={{ jenkins_agent_hosts_systemd_group }}
-WorkingDirectory={{ jenkins_agent_hosts_remote_fs }}
-EnvironmentFile={{ jenkins_agent_hosts_systemd_env_dir }}/{{ jenkins_agent_hosts_node_local.name }}.env
+User={{ jenkins_agent_systemd_user }}
+Group={{ jenkins_agent_systemd_group }}
+WorkingDirectory={{ jenkins_agent_remote_fs }}
+EnvironmentFile={{ jenkins_agent_systemd_env_dir }}/{{ jenkins_agent_node_local.name }}.env
 ExecStart=/usr/bin/java \
-  -jar {{ jenkins_agent_hosts_systemd_install_dir }}/agent.jar \
-  -url {{ jenkins_agent_hosts_controller_url }} \
+  -jar {{ jenkins_agent_systemd_install_dir }}/agent.jar \
+  -url {{ jenkins_agent_controller_url }} \
   -secret ${JENKINS_AGENT_SECRET} \
-  -name {{ jenkins_agent_hosts_node_local.name }} \
-{% if jenkins_agent_hosts_use_websocket | bool %}
+  -name {{ jenkins_agent_node_local.name }} \
+{% if jenkins_agent_use_websocket | bool %}
   -webSocket \
 {% endif %}
-  -workDir {{ jenkins_agent_hosts_remote_fs }}
+  -workDir {{ jenkins_agent_remote_fs }}
 Restart=always
 RestartSec=15
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier={{ jenkins_agent_hosts_systemd_service_name }}
+SyslogIdentifier={{ jenkins_agent_systemd_service_name }}
 
 [Install]
 WantedBy=multi-user.target

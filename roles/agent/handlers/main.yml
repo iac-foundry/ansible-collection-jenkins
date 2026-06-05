@@ -6,8 +6,8 @@
 
 - name: Restart Jenkins inbound agent (systemd)
   ansible.builtin.systemd:
-    name: "{{ jenkins_agent_hosts_systemd_service_name }}"
+    name: "{{ jenkins_agent_systemd_service_name }}"
     state: restarted
     daemon_reload: true
   become: true
-  when: jenkins_agent_hosts_controller_mode == 'systemd'
+  when: jenkins_agent_controller_mode == 'systemd'
