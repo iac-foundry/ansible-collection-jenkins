@@ -1,0 +1,17 @@
+---
+argument_specs:
+  main:
+    short_description: "agent for jenkins."
+    options:
+      jenkins_agent_server_url:
+        type: str
+        required: true
+        description: URL of the server this agent registers with (caller-supplied).
+      jenkins_agent_work_dir:
+        type: str
+        default: "/var/lib/jenkins-agent"
+        description: Agent working directory.
+      jenkins_agent_secret:
+        type: str
+        default: ""
+        description: Caller-supplied join secret; never retrieved by this role.

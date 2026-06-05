@@ -1,18 +1,20 @@
-namespace: blueprint
+---
+namespace: blueprints
 name: jenkins
 version: 0.1.0
 readme: README.md
 authors:
-  - ICS Platform Engineering
-description: Reusable multi-org Jenkins controller and agent automation collection.
+  - Platform Engineering
+description: "Reusable, org-agnostic Jenkins building blocks (no hidden dependencies)."
 license:
   - MIT
-repository: https://github.com/iac-foundry/ansible-collection-jenkins
-homepage: https://github.com/iac-foundry/ansible-collection-jenkins
-issues: https://github.com/iac-foundry/ansible-collection-jenkins/issues
 tags:
+  - tools
+  - blueprints
   - jenkins
-  - ci
-  - controller
-  - agent
-  - automation
+repository: https://github.com/iac-foundry/ansible-collection-jenkins
+dependencies: {}
+build_ignore:
+  - .github
+  - "*.tar.gz"
+  - extensions

@@ -1,0 +1,13 @@
+---
+argument_specs:
+  main:
+    short_description: "job_dsl capability for jenkins."
+    options:
+      jenkins_job_dsl_enabled:
+        type: bool
+        default: true
+        description: Whether this capability is applied.
+      jenkins_job_dsl_config:
+        type: dict
+        default: {}
+        description: Caller-supplied configuration map.

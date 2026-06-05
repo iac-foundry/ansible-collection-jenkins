@@ -1,10 +1,10 @@
-# blueprints.jenkins.agent
+# blueprints.jenkins.systemd_server
 
-Jenkins inbound build agent.
+Run Jenkins as a systemd service.
 
 ## Deployment model
 
-`agent` (agent).
+`systemd_server` (server).
 
 ## Inputs
 

@@ -1,7 +1,0 @@
-.DS_Store
-*.retry
-*.log
-*.swp
-*.bak
-__pycache__/
-.venv/

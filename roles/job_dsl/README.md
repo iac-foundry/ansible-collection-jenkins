@@ -1,10 +1,10 @@
-# blueprints.jenkins.agent
+# blueprints.jenkins.job_dsl
 
-Jenkins inbound build agent.
+Apply Job DSL seed configuration.
 
 ## Deployment model
 
-`agent` (agent).
+`job_dsl` (capability).
 
 ## Inputs
 

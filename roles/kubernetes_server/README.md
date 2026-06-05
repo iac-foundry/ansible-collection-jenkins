@@ -1,10 +1,10 @@
-# blueprints.jenkins.agent
+# blueprints.jenkins.kubernetes_server
 
-Jenkins inbound build agent.
+Run Jenkins on Kubernetes.
 
 ## Deployment model
 
-`agent` (agent).
+`kubernetes_server` (server).
 
 ## Inputs
 

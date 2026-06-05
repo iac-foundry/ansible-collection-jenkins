@@ -1,0 +1,11 @@
+---
+- name: Converge
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Include blueprints.jenkins.container_server with caller-supplied variables
+      ansible.builtin.include_role:
+        name: blueprints.jenkins.container_server
+      vars:
+        jenkins_server_image: "example/jenkins:latest"
+        jenkins_server_admin_secret: "dummy-not-a-real-secret"

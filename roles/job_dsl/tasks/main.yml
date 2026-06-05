@@ -1,0 +1,7 @@
+---
+- name: Scaffold convergence placeholder
+  ansible.builtin.debug:
+    msg: "Scaffold for job_dsl: apply caller-supplied jenkins configuration."
+  when: jenkins_job_dsl_enabled | bool
+  tags:
+    - job_dsl

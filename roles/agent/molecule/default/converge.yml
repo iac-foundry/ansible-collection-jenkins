@@ -1,0 +1,10 @@
+---
+- name: Converge
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Include blueprints.jenkins.agent with caller-supplied variables
+      ansible.builtin.include_role:
+        name: blueprints.jenkins.agent
+      vars:
+        jenkins_agent_server_url: "https://example.invalid"

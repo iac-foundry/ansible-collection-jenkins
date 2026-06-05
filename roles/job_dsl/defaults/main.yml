@@ -1,0 +1,3 @@
+---
+jenkins_job_dsl_enabled: true
+jenkins_job_dsl_config: {}             # caller-supplied configuration map

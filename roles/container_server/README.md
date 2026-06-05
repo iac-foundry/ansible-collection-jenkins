@@ -1,10 +1,10 @@
-# blueprints.jenkins.agent
+# blueprints.jenkins.container_server
 
-Jenkins inbound build agent.
+Run Jenkins as a container.
 
 ## Deployment model
 
-`agent` (agent).
+`container_server` (server).
 
 ## Inputs
 
