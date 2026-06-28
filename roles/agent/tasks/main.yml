@@ -1,21 +1,116 @@
 ---
-- name: Assert required inputs are supplied by the caller
+# ── 1. Fail-fast input validation ────────────────────────────────────────────
+
+- name: Validate jenkins_controller_mode
+  ansible.builtin.assert:
+    that:
+      - jenkins_controller_mode in ['container', 'systemd']
+    fail_msg: >
+      jenkins_controller_mode must be 'container' or 'systemd',
+      got: '{{ jenkins_controller_mode }}'.
+  tags: [agent, validate]
+
+- name: Validate required caller inputs
   ansible.builtin.assert:
     that:
       - jenkins_agent_server_url | length > 0
-    fail_msg: "jenkins_agent_server_url must be supplied by the caller."
-  tags:
-    - agent
+      - jenkins_agent_name | length > 0
+    fail_msg: >
+      jenkins_agent_server_url and jenkins_agent_name must be supplied by the
+      caller (no org-specific defaults exist for these values).
+  tags: [agent, validate]
 
-- name: Record caller-supplied secret presence (never retrieved here)
-  ansible.builtin.set_fact:
-    jenkins_agent_secret_present: "{{ jenkins_agent_secret | length > 0 }}"
+# ── 2. Java runtime ───────────────────────────────────────────────────────────
+
+- name: Install Java runtime
+  ansible.builtin.package:
+    name: "{{ jenkins_agent_java_package }}"
+    state: present
+  become: true
+  tags: [agent, install]
+
+# ── 3. System user and group ─────────────────────────────────────────────────
+
+- name: Create Jenkins agent system group
+  ansible.builtin.group:
+    name: "{{ jenkins_agent_group }}"
+    system: true
+    state: present
+  become: true
+  tags: [agent, user]
+
+- name: Create Jenkins agent system user
+  ansible.builtin.user:
+    name: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_group }}"
+    home: "{{ jenkins_agent_work_dir }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+    state: present
+  become: true
+  tags: [agent, user]
+
+# ── 4. Work directory ─────────────────────────────────────────────────────────
+
+- name: Ensure work directory exists
+  ansible.builtin.file:
+    path: "{{ jenkins_agent_work_dir }}"
+    state: directory
+    owner: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_group }}"
+    mode: "0750"
+  become: true
+  tags: [agent, directories]
+
+# ── 5. Agent jar ──────────────────────────────────────────────────────────────
+
+- name: Download jenkins-agent.jar from controller
+  ansible.builtin.get_url:
+    url: "{{ jenkins_agent_server_url }}/jnlpJars/agent.jar"
+    dest: "{{ jenkins_agent_work_dir }}/agent.jar"
+    owner: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_group }}"
+    mode: "0640"
+    validate_certs: "{{ jenkins_agent_validate_certs }}"
+  become: true
+  tags: [agent, install]
+
+# ── 6. JNLP secret file ───────────────────────────────────────────────────────
+# Secret written to disk (mode 0600) so the systemd unit reads it with
+# -secret @<path> — keeps it out of process argv and journald output.
+
+- name: Write agent JNLP secret file
+  ansible.builtin.copy:
+    content: "{{ jenkins_agent_secret }}"
+    dest: "{{ jenkins_agent_work_dir }}/agent.secret"
+    owner: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_group }}"
+    mode: "0600"
+  become: true
   no_log: true
-  tags:
-    - agent
+  tags: [agent, secret]
 
-- name: Scaffold convergence placeholder
-  ansible.builtin.debug:
-    msg: "Scaffold for agent: register jenkins agent with {{ jenkins_agent_server_url }}."
-  tags:
-    - agent
+# ── 7. Systemd service unit ───────────────────────────────────────────────────
+
+- name: Install jenkins-agent systemd service unit
+  ansible.builtin.template:
+    src: jenkins-agent.service.j2
+    dest: /etc/systemd/system/jenkins-agent.service
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd and restart jenkins-agent
+  tags: [agent, service]
+
+# ── 8. Service state ──────────────────────────────────────────────────────────
+
+- name: Enable and start jenkins-agent service
+  ansible.builtin.systemd:
+    name: jenkins-agent
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+  tags: [agent, service]

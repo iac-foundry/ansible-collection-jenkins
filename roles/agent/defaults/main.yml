@@ -1,4 +1,25 @@
 ---
-jenkins_agent_server_url: ""         # REQUIRED: URL of the server to register with (caller-supplied)
+# REQUIRED — caller-supplied; no org-specific defaults.
+jenkins_agent_server_url: ""       # e.g. https://ci.example.com
+jenkins_agent_name: ""             # node name registered in Jenkins controller
+jenkins_agent_secret: ""           # JNLP join secret; no_log; caller resolves and passes in
+
+# Controller deployment model — affects connection defaults and CA expectations.
+# Fail-fast when an invalid value is supplied (see tasks/main.yml).
+jenkins_controller_mode: "container"  # container | systemd
+
+# Agent runtime.
 jenkins_agent_work_dir: "/var/lib/jenkins-agent"
-jenkins_agent_secret: ""             # caller-supplied join secret; never retrieved by this role
+jenkins_agent_user: "jenkins"
+jenkins_agent_group: "jenkins"
+jenkins_agent_java_package: "openjdk-21-jre-headless"
+
+# Connection behaviour.
+# WebSocket is the recommended default — avoids exposing port 50000 and works
+# through most reverse proxies.  Set false only when the controller is
+# reachable on its raw JNLP port (50000) from this host.
+jenkins_agent_use_websocket: true
+jenkins_agent_validate_certs: true
+
+# Extra JVM flags passed to the agent process (e.g. proxy, heap).
+jenkins_agent_extra_jvm_args: ""

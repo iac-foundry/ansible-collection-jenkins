@@ -1,10 +1,17 @@
 ---
 - name: Converge
   hosts: all
-  gather_facts: false
+  gather_facts: true
   tasks:
     - name: Include blueprints.jenkins.agent with caller-supplied variables
       ansible.builtin.include_role:
         name: blueprints.jenkins.agent
       vars:
-        jenkins_agent_server_url: "https://example.invalid"
+        # Caller-supplied required inputs — no org-specific values.
+        jenkins_agent_server_url: "http://ci.example.invalid"
+        jenkins_agent_name: "test-agent"
+        jenkins_agent_secret: "test-secret-for-molecule-only"
+        # Verify fail-fast: change to an invalid value to test the assertion.
+        jenkins_controller_mode: "container"
+        # Skip cert validation in molecule (no real controller).
+        jenkins_agent_validate_certs: false
