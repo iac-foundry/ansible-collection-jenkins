@@ -1,0 +1,37 @@
+[Unit]
+Description=Jenkins Inbound Build Agent ({{ jenkins_agent_name }})
+Documentation=https://www.jenkins.io/doc/book/using/using-agents/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ jenkins_agent_user }}
+Group={{ jenkins_agent_group }}
+WorkingDirectory={{ jenkins_agent_work_dir }}
+
+ExecStart=/usr/bin/java \
+{% if jenkins_agent_extra_jvm_args | length > 0 %}
+  {{ jenkins_agent_extra_jvm_args }} \
+{% endif %}
+  -jar {{ jenkins_agent_work_dir }}/agent.jar \
+  -url {{ jenkins_agent_server_url }} \
+{% if jenkins_agent_use_websocket %}
+  -webSocket \
+{% endif %}
+  -name "{{ jenkins_agent_name }}" \
+  -secret @{{ jenkins_agent_work_dir }}/agent.secret \
+  -workDir {{ jenkins_agent_work_dir }}
+
+# Restart on failure with back-off — handles transient controller unavailability.
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+# Prevent secret from leaking into environment or core dumps.
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

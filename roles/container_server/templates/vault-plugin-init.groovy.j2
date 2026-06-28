@@ -1,0 +1,32 @@
+// Vault AppRole Authentication Configuration for Jenkins
+// This script configures Jenkins to authenticate with Vault using AppRole auth
+// and sets up the Vault plugin for credential management
+
+import jenkins.model.Jenkins
+import com.cloudbees.plugins.credentials.CredentialsProvider
+import com.cloudbees.plugins.credentials.domains.Domain
+import com.datapipe.jenkins.vault.configuration.GlobalVaultConfiguration
+import com.datapipe.jenkins.vault.configuration.VaultConfiguration
+
+def jenkins = Jenkins.getInstance()
+def credentialsStore = jenkins.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+
+// Configure Vault server connection
+def vaultConfig = new VaultConfiguration()
+vaultConfig.setVaultUrl("{{ jenkins_server_vault_url }}")
+vaultConfig.setVaultCredentialId("vault-app-role")
+vaultConfig.setEngineVersion(2)
+vaultConfig.setSkipSslVerification(false)
+vaultConfig.setVaultCredentialId("vault-app-role")
+vaultConfig.setPreservePrefixVar(true)
+
+// Update the global configuration
+def globalConfig = jenkins.getDescriptor(GlobalVaultConfiguration.class)
+globalConfig.setConfiguration(vaultConfig)
+globalConfig.save()
+
+jenkins.save()
+
+println("Vault AppRole authentication configured successfully")
+println("Vault URL: {{ jenkins_server_vault_url }}")
+println("Role ID: {{ jenkins_server_vault_role_id }}")

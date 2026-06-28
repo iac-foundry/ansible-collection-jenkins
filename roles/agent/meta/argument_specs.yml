@@ -1,17 +1,68 @@
 ---
 argument_specs:
   main:
-    short_description: "agent for jenkins."
+    short_description: "Deploy and register a Jenkins inbound build agent (systemd)."
     options:
       jenkins_agent_server_url:
         type: str
         required: true
-        description: URL of the server this agent registers with (caller-supplied).
-      jenkins_agent_work_dir:
+        description: >
+          Full URL of the Jenkins controller this agent registers with.
+          Caller-supplied; no org-specific default (e.g. https://ci.example.com).
+      jenkins_agent_name:
         type: str
-        default: "/var/lib/jenkins-agent"
-        description: Agent working directory.
+        required: true
+        description: >
+          Node name as registered in the Jenkins controller.
+          Must match the name configured on the controller side.
       jenkins_agent_secret:
         type: str
         default: ""
-        description: Caller-supplied join secret; never retrieved by this role.
+        description: >
+          JNLP join secret for this agent node.  Caller resolves and passes in;
+          never retrieved by this role.  Stored on disk with mode 0600.
+      jenkins_controller_mode:
+        type: str
+        default: "container"
+        description: >
+          Deployment model of the Jenkins controller.  Accepted values:
+          'container' (controller runs in Docker/Podman) or 'systemd'
+          (controller runs as a systemd service).  Affects CA expectations
+          and connection defaults.  Fails fast on invalid values.
+      jenkins_agent_work_dir:
+        type: str
+        default: "/var/lib/jenkins-agent"
+        description: Agent working directory; owns agent.jar, secret file, and workspace.
+      jenkins_agent_user:
+        type: str
+        default: "jenkins"
+        description: System user the agent process runs as.
+      jenkins_agent_group:
+        type: str
+        default: "jenkins"
+        description: System group for the agent user.
+      jenkins_agent_java_package:
+        type: str
+        default: "openjdk-21-jre-headless"
+        description: >
+          Java package to install via the system package manager.
+          Override if the controller requires a different JDK version.
+      jenkins_agent_use_websocket:
+        type: bool
+        default: true
+        description: >
+          Connect to controller via WebSocket (recommended).  Avoids requiring
+          inbound port 50000 and works through most reverse proxies.
+          Set false when the controller's raw JNLP port is directly reachable.
+      jenkins_agent_validate_certs:
+        type: bool
+        default: true
+        description: >
+          Validate the controller's TLS certificate.  Set false only in test
+          environments with self-signed certificates; never in production.
+      jenkins_agent_extra_jvm_args:
+        type: str
+        default: ""
+        description: >
+          Additional JVM arguments appended to the agent launch command
+          (e.g. '-Xmx2g -Dhttps.proxyHost=proxy.example.com').
