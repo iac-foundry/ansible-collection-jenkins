@@ -9,6 +9,8 @@ jenkins_server_data_dir: "/var/lib/jenkins"
 jenkins_server_tls_cert: ""           # when set (with key), TLS is enabled automatically
 jenkins_server_tls_key: ""
 jenkins_server_admin_secret: ""       # caller-supplied secret; never retrieved by this role
+jenkins_server_uid: 1000              # fixed UID for the host-side jenkins user; passed to docker_container's user: param (LADR-009)
+jenkins_server_gid: 1000              # fixed GID for the host-side jenkins group; passed to docker_container's user: param (LADR-009)
 
 # Vault AppRole authentication (optional; for jenkins_integrations.vault_auth role to fill)
 jenkins_server_vault_url: ""          # HTTPS URL to Vault (e.g., https://vault.local:8443)

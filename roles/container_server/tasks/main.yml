@@ -37,9 +37,19 @@
   tags:
     - container_server
 
+- name: Create jenkins group
+  ansible.builtin.group:
+    name: jenkins
+    gid: "{{ jenkins_server_gid }}"
+    system: true
+    state: present
+  tags:
+    - container_server
+
 - name: Create jenkins user and group
   ansible.builtin.user:
     name: jenkins
+    uid: "{{ jenkins_server_uid }}"
     group: jenkins
     system: true
     shell: /usr/sbin/nologin
@@ -119,6 +129,9 @@
     image: "{{ jenkins_server_image }}"
     state: started
     restart_policy: unless-stopped
+    user: "{{ jenkins_server_uid }}:{{ jenkins_server_gid }}"
+    cap_drop:
+      - ALL
     ports:
       - "{{ jenkins_server_https_port }}:8443"
       - "50000:50000"
