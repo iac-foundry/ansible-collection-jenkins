@@ -161,6 +161,50 @@
   tags:
     - container_server
 
+- name: Create jenkins plugins directory
+  ansible.builtin.file:
+    path: "{{ jenkins_server_data_dir }}/plugins"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: "0755"
+  when: jenkins_server_plugins | length > 0
+  tags:
+    - container_server
+
+# The base jenkins/jenkins image ships no plugins. Use the image's own
+# jenkins-plugin-cli to download the required plugins (and their transitive
+# dependencies) straight into the data dir's plugins/ folder, which is
+# mounted to /var/jenkins_home/plugins -- so Jenkins loads them on start.
+# Run as root (--user 0:0) to avoid a uid mismatch between the image's
+# default jenkins user (uid 1000) and this host's OS-assigned jenkins uid;
+# ownership is corrected immediately afterwards.
+- name: Install Jenkins plugins via jenkins-plugin-cli
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm --user 0:0
+      --entrypoint jenkins-plugin-cli
+      -v {{ jenkins_server_data_dir }}/plugins:/plugins
+      {{ jenkins_server_image }}
+      --plugin-download-directory /plugins
+      --plugins {{ jenkins_server_plugins | join(' ') }}
+  register: jenkins_plugin_install
+  changed_when: "'Downloaded' in jenkins_plugin_install.stdout or 'Done' in jenkins_plugin_install.stdout"
+  when: jenkins_server_plugins | length > 0
+  tags:
+    - container_server
+
+- name: Ensure plugins directory ownership (jenkins-plugin-cli ran as root)
+  ansible.builtin.file:
+    path: "{{ jenkins_server_data_dir }}/plugins"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    recurse: true
+  when: jenkins_server_plugins | length > 0
+  tags:
+    - container_server
+
 - name: Start/restart Jenkins container
   community.docker.docker_container:
     name: jenkins
@@ -170,6 +214,12 @@
     user: "{{ jenkins_server_actual_uid }}:{{ jenkins_server_actual_gid }}"
     cap_drop:
       - ALL
+    # Recreate the container whenever the installed plugin set changes, so
+    # newly installed plugins are actually loaded (the docker_container
+    # module would not otherwise restart just because the mounted plugins/
+    # directory contents changed).
+    labels:
+      vernify.jenkins.plugins: "{{ jenkins_server_plugins | sort | join(',') }}"
     ports:
       - "{{ jenkins_server_https_port }}:8443"
       - "50000:50000"

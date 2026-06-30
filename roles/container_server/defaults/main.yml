@@ -25,6 +25,20 @@ jenkins_server_keystore_password: "changeit"
 jenkins_server_uid: null
 jenkins_server_gid: null
 
+# Jenkins plugins to install into the data dir before the container starts.
+# The base jenkins/jenkins image ships NO plugins, so anything this role or
+# the jenkins_integrations roles depend on must be listed here. Defaults
+# cover the HashiCorp Vault integration this role renders an init script
+# for (vault-plugin.groovy) and that jenkins_integrations.vault_auth
+# configures via the REST API: both need the hashicorp-vault-plugin class
+# com.datapipe.jenkins.vault.* and the credentials plugin's
+# com.cloudbees.plugins.credentials.*. jenkins-plugin-cli auto-resolves
+# each plugin's transitive dependencies. Set to [] to skip plugin install.
+jenkins_server_plugins:
+  - hashicorp-vault-plugin
+  - credentials
+  - credentials-binding
+
 # Vault AppRole authentication (optional; for jenkins_integrations.vault_auth role to fill)
 jenkins_server_vault_url: ""          # HTTPS URL to Vault (e.g., https://vault.local:8443)
 jenkins_server_vault_role_id: ""      # AppRole role_id from Vault (from vault_integrations.vault_auth)
