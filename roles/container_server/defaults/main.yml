@@ -8,6 +8,7 @@ jenkins_server_https_port: 8443
 jenkins_server_data_dir: "/var/lib/jenkins"
 jenkins_server_tls_cert: ""           # when set (with key), TLS is enabled automatically
 jenkins_server_tls_key: ""
+jenkins_server_tls_cert_sha: ""      # SHA of the cert; baked into a container label so docker_container recreates on cert change
 jenkins_server_admin_secret: ""       # caller-supplied secret; never retrieved by this role
 # Password for the PKCS12 keystore that Jenkins' Winstone HTTPS listener
 # reads (built from the supplied PEM cert+key). The keystore lives next to

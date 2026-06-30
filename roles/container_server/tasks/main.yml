@@ -220,6 +220,7 @@
     # directory contents changed).
     labels:
       vernify.jenkins.plugins: "{{ jenkins_server_plugins | sort | join(',') }}"
+      vernify.jenkins.tls-cert-sha: "{{ jenkins_server_tls_cert_sha }}"
     ports:
       - "{{ jenkins_server_https_port }}:8443"
       - "50000:50000"
