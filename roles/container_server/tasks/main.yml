@@ -108,6 +108,35 @@
   tags:
     - container_server
 
+# Jenkins' bundled Winstone server only accepts a Java keystore for its
+# HTTPS listener (--httpsKeyStore + --httpsKeyStorePassword); it does NOT
+# accept PEM cert/key files directly (no --httpsCertificate/--httpsPrivateKey
+# in this version). Without this, the container would only ever serve plain
+# HTTP on 8080 and the 8443 listener would not exist at all (connection
+# refused). Build a PKCS12 keystore from the supplied PEM cert+key.
+- name: Build PKCS12 keystore for Jenkins HTTPS listener
+  ansible.builtin.command:
+    cmd: >-
+      openssl pkcs12 -export
+      -inkey {{ jenkins_server_data_dir }}/config/jenkins.key
+      -in {{ jenkins_server_data_dir }}/config/jenkins.crt
+      -out {{ jenkins_server_data_dir }}/config/jenkins.p12
+      -name jenkins
+      -passout pass:{{ jenkins_server_keystore_password }}
+  no_log: true
+  changed_when: true
+  tags:
+    - container_server
+
+- name: Set ownership/permissions on the keystore
+  ansible.builtin.file:
+    path: "{{ jenkins_server_data_dir }}/config/jenkins.p12"
+    owner: jenkins
+    group: jenkins
+    mode: "0600"
+  tags:
+    - container_server
+
 - name: Create jenkins init scripts directory for Groovy configuration
   ansible.builtin.file:
     path: "{{ jenkins_server_data_dir }}/init.groovy.d"
@@ -151,6 +180,16 @@
     env:
       JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
       CASC_JENKINS_CONFIG: "/var/jenkins_home/jenkins.yaml"
+      # Enable the HTTPS listener on 8443 from the PKCS12 keystore built
+      # above, and disable plain HTTP so the container is TLS-only (the
+      # data dir mounts to /var/jenkins_home, so config/jenkins.p12 is at
+      # /var/jenkins_home/config/jenkins.p12 inside the container).
+      JENKINS_OPTS: >-
+        --httpPort=-1
+        --httpsPort=8443
+        --httpsKeyStore=/var/jenkins_home/config/jenkins.p12
+        --httpsKeyStorePassword={{ jenkins_server_keystore_password }}
+  no_log: true
   tags:
     - container_server
 

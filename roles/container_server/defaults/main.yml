@@ -9,6 +9,13 @@ jenkins_server_data_dir: "/var/lib/jenkins"
 jenkins_server_tls_cert: ""           # when set (with key), TLS is enabled automatically
 jenkins_server_tls_key: ""
 jenkins_server_admin_secret: ""       # caller-supplied secret; never retrieved by this role
+# Password for the PKCS12 keystore that Jenkins' Winstone HTTPS listener
+# reads (built from the supplied PEM cert+key). The keystore lives next to
+# the key file with the same restrictive perms, so its security is the
+# file permissions, not this password -- a fixed default keeps the
+# container_server role idempotent (a random per-run password would not
+# match the existing keystore on a re-converge). Override only if desired.
+jenkins_server_keystore_password: "changeit"
 # uid/gid are left unset (null) by default: the OS picks the next free
 # system id (system: true), which tasks/main.yml then captures and uses for
 # docker_container's user: param (LADR-009). A fixed numeric default (1000)
