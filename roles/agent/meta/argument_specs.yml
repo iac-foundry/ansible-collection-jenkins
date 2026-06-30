@@ -60,6 +60,16 @@ argument_specs:
         description: >
           Validate the controller's TLS certificate.  Set false only in test
           environments with self-signed certificates; never in production.
+      jenkins_agent_controller_ca_cert:
+        type: str
+        default: ""
+        description: >
+          PEM-encoded CA certificate CONTENT the agent should trust when
+          connecting to a controller served by a private CA (e.g. step-ca).
+          When set, it is written to disk and passed via `-cert @<file>`.
+          Required when the controller's TLS cert is not anchored in the
+          JVM's default truststore, otherwise the agent fails with a PKIX
+          path-building error.
       jenkins_agent_extra_jvm_args:
         type: str
         default: ""

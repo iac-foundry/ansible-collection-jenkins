@@ -91,6 +91,23 @@
   no_log: true
   tags: [agent, secret]
 
+# ── 6b. Controller CA cert (private-CA trust) ────────────────────────────────
+# Written so the systemd unit can pass `-cert @<path>` -- lets the agent
+# trust a controller using a private CA (step-ca) without modifying the
+# system/JVM truststore. Public cert, so 0644.
+
+- name: Write controller CA certificate (when a private CA is supplied)
+  ansible.builtin.copy:
+    content: "{{ jenkins_agent_controller_ca_cert }}"
+    dest: "{{ jenkins_agent_work_dir }}/controller-ca.crt"
+    owner: "{{ jenkins_agent_user }}"
+    group: "{{ jenkins_agent_group }}"
+    mode: "0644"
+  become: true
+  when: jenkins_agent_controller_ca_cert | length > 0
+  notify: Reload systemd and restart jenkins-agent
+  tags: [agent, secret]
+
 # ── 7. Systemd service unit ───────────────────────────────────────────────────
 
 - name: Install jenkins-agent systemd service unit
