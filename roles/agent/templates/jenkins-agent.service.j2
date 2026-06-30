@@ -21,9 +21,6 @@ ExecStart=/usr/bin/java \
 {% endif %}
   -name "{{ jenkins_agent_name }}" \
   -secret @{{ jenkins_agent_work_dir }}/agent.secret \
-{% if jenkins_agent_controller_ca_cert | length > 0 %}
-  -cert @{{ jenkins_agent_work_dir }}/controller-ca.crt \
-{% endif %}
   -workDir {{ jenkins_agent_work_dir }}
 
 # Restart on failure with back-off — handles transient controller unavailability.

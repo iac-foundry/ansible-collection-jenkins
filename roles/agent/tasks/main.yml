@@ -91,22 +91,48 @@
   no_log: true
   tags: [agent, secret]
 
-# ── 6b. Controller CA cert (private-CA trust) ────────────────────────────────
-# Written so the systemd unit can pass `-cert @<path>` -- lets the agent
-# trust a controller using a private CA (step-ca) without modifying the
-# system/JVM truststore. Public cert, so 0644.
+# ── 6b. Controller CA trust (private-CA controllers) ─────────────────────────
+# When the controller uses a private CA (step-ca), the agent's Java process
+# must trust it or the WebSocket TLS handshake fails with a PKIX error.
+# Passing the cert via the agent's own `-cert @file` does NOT work: the
+# agent.jar's args4j parser treats any @-prefixed token as a response file
+# and parses the certificate's contents as bogus command-line arguments
+# ("-----END CERTIFICATE----- is not a valid option"). Instead, install the
+# CA into the host trust anchors; ca-certificates-java's update hook then
+# folds it into the JVM truststore the agent uses by default -- no agent
+# flag, properly verified TLS. (Debian/Ubuntu mechanism; matches this
+# role's apt/openjdk assumptions.)
+- name: Ensure CA-trust tooling is present (system + JVM trust stores)
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - ca-certificates-java
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: jenkins_agent_controller_ca_cert | length > 0
+  tags: [agent, tls]
 
-- name: Write controller CA certificate (when a private CA is supplied)
+- name: Install the controller CA into the system trust anchors
   ansible.builtin.copy:
     content: "{{ jenkins_agent_controller_ca_cert }}"
-    dest: "{{ jenkins_agent_work_dir }}/controller-ca.crt"
-    owner: "{{ jenkins_agent_user }}"
-    group: "{{ jenkins_agent_group }}"
+    dest: /usr/local/share/ca-certificates/jenkins-controller-ca.crt
+    owner: root
+    group: root
     mode: "0644"
   become: true
   when: jenkins_agent_controller_ca_cert | length > 0
+  register: _jenkins_controller_ca_file
+  tags: [agent, tls]
+
+- name: Update CA trust stores (refreshes the JVM truststore via the java hook)
+  ansible.builtin.command: update-ca-certificates
+  become: true
+  when: _jenkins_controller_ca_file is changed
+  changed_when: true
   notify: Reload systemd and restart jenkins-agent
-  tags: [agent, secret]
+  tags: [agent, tls]
 
 # ── 7. Systemd service unit ───────────────────────────────────────────────────
 

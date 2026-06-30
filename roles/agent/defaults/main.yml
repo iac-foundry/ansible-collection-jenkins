@@ -23,12 +23,13 @@ jenkins_agent_validate_certs: true
 
 # PEM-encoded CA certificate (CONTENT, not a path) the agent should trust
 # when connecting to the controller's HTTPS/WebSocket endpoint. When the
-# controller uses a private CA (e.g. step-ca) that is not in the JVM's
-# default truststore, the agent's TLS handshake fails with a PKIX
-# "unable to find valid certification path" error -- jenkins_agent_validate_certs
-# only governs the agent.jar download, not the running agent's own
-# connection. When set, this cert is written to disk and passed to the
-# agent via `-cert @<file>` (hudson.remoting's trusted-cert option).
+# controller uses a private CA (e.g. step-ca) not in the JVM's default
+# truststore, the agent's TLS handshake fails with a PKIX
+# "unable to find valid certification path" error (jenkins_agent_validate_certs
+# only governs the agent.jar download, not the running agent's connection).
+# When set, the role installs this CA into the host trust anchors and
+# refreshes the JVM truststore (ca-certificates-java), so the agent trusts
+# it natively over properly verified TLS.
 jenkins_agent_controller_ca_cert: ""
 
 # Extra JVM flags passed to the agent process (e.g. proxy, heap).
