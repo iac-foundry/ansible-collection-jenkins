@@ -11,14 +11,20 @@ import com.datapipe.jenkins.vault.configuration.VaultConfiguration
 def jenkins = Jenkins.getInstance()
 def credentialsStore = jenkins.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
 
-// Configure Vault server connection
+// Configure Vault server connection.
+// NOTE: only setters that actually exist on this plugin version's
+// VaultConfiguration are used here -- a previous setPreservePrefixVar(true)
+// call threw MissingMethodException at startup (the method does not exist;
+// verified against the installed hashicorp-vault-plugin via javap). Valid
+// setters: setVaultUrl, setVaultCredentialId, setVaultCredential,
+// setFailIfNotFound, setSkipSslVerification, setEngineVersion,
+// setVaultNamespace, setPrefixPath, setPolicies,
+// setDisableChildPoliciesOverride, setTimeout.
 def vaultConfig = new VaultConfiguration()
 vaultConfig.setVaultUrl("{{ jenkins_server_vault_url }}")
 vaultConfig.setVaultCredentialId("vault-app-role")
 vaultConfig.setEngineVersion(2)
 vaultConfig.setSkipSslVerification(false)
-vaultConfig.setVaultCredentialId("vault-app-role")
-vaultConfig.setPreservePrefixVar(true)
 
 // Update the global configuration
 def globalConfig = jenkins.getDescriptor(GlobalVaultConfiguration.class)
